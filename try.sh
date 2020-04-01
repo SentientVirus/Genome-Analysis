@@ -2,7 +2,7 @@
 #SBATCH -A g2020008
 #SBATCH -p core
 #SBATCH -n 2
-#SBATCH -t 00:05:00
+#SBATCH -t 04:00:00
 #SBATCH -J try_assembly
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user Marina.Motamerlo.2433@student.uu.se
