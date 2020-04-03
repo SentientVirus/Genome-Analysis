@@ -10,4 +10,4 @@
 module load bioinfo-tools
 module load quast
 # Your commands
-python quast.py -o project -R /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta --gene-finding -t 2 /project/DNA_raw_assembly.contigs.fasta
+python quast.py -o project -R /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta --gene-finding -t 2 /assembly/DNA_raw_assembly.contigs.fasta
