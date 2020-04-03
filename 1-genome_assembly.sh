@@ -10,4 +10,4 @@
 module load bioinfo-tools
 module load canu
 # Your commands
-canu maxThreads=2 -d assembly -p DNA_raw_assembly genomeSize=2.5m stopOnReadQuality=false -pacbio-raw 3_Christel_2017/DNA_raw_data/*
+canu executiveThreads=2 -d project -p DNA_raw_assembly genomeSize=2.5m stopOnReadQuality=false -pacbio-raw 3_Christel_2017/DNA_raw_data/ERR2028495.fastq.gz 3_Christel_2017/DNA_raw_data/ERR2028496.fastq.gz /proj/g2020008/nobackup/private/3_Christel_2017/DNA_raw_data/ERR2028497.fastq.gz 3_Christel_2017/DNA_raw_data/ERR2028500.fastq.gz 3_Christel_2017/DNA_raw_data/ERR2028501.fastq.gz 3_Christel_2017/DNA_raw_data/ERR2028502.fastq.gz
