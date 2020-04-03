@@ -10,13 +10,13 @@
 module load bioinfo-tools
 module load trimmomatic
 # Your commands
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2036629_1.fastq.gz  ERR2036629_2.fastq.gz ERR2036629_P1.trim.fastq.gz ERR2036629_S1.trim.fastq.gz ERR2036629_P2.trim.fastq.gz ERR2036629_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2036630_1.fastq.gz  ERR2036630_2.fastq.gz ERR2036630_P1.trim.fastq.gz ERR2036630_S1.trim.fastq.gz ERR2036630_P2.trim.fastq.gz ERR2036630_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2036631_1.fastq.gz  ERR2036631_2.fastq.gz ERR2036631_P1.trim.fastq.gz ERR2036631_S1.trim.fastq.gz ERR2036631_P2.trim.fastq.gz ERR2036631_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2036632_1.fastq.gz  ERR2036632_2.fastq.gz ERR2036632_P1.trim.fastq.gz ERR2036632_S1.trim.fastq.gz ERR2036632_P2.trim.fastq.gz ERR2036632_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2036633_1.fastq.gz  ERR2036633_2.fastq.gz ERR2036633_P1.trim.fastq.gz ERR2036633_S1.trim.fastq.gz ERR2036633_P2.trim.fastq.gz ERR2036633_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2117288_1.fastq.gz  ERR2117288_2.fastq.gz ERR2117288_P1.trim.fastq.gz ERR2117288_S1.trim.fastq.gz ERR2117288_P2.trim.fastq.gz ERR2117288_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2117289_1.fastq.gz  ERR2117289_2.fastq.gz ERR2117289_P1.trim.fastq.gz ERR2117289_S1.trim.fastq.gz ERR2117289_P2.trim.fastq.gz ERR2117289_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2117290_1.fastq.gz  ERR2117290_2.fastq.gz ERR2117290_P1.trim.fastq.gz ERR2117290_S1.trim.fastq.gz ERR2117290_P2.trim.fastq.gz ERR2117290_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2117291_1.fastq.gz  ERR2117291_2.fastq.gz ERR2117291_P1.trim.fastq.gz ERR2117291_S1.trim.fastq.gz ERR2117291_P2.trim.fastq.gz ERR2117291_S2.trim.fastq.gz
-java -jar $TRIMMOMATIC_HOME/trimmomatic.jar -threads 2 PE ERR2117292_1.fastq.gz  ERR2117292_2.fastq.gz ERR2117292_P1.trim.fastq.gz ERR2117292_S1.trim.fastq.gz ERR2117292_P2.trim.fastq.gz ERR2117292_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2036629_1.fastq.gz  ERR2036629_2.fastq.gz ERR2036629_P1.trim.fastq.gz ERR2036629_S1.trim.fastq.gz ERR2036629_P2.trim.fastq.gz ERR2036629_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2036630_1.fastq.gz  ERR2036630_2.fastq.gz ERR2036630_P1.trim.fastq.gz ERR2036630_S1.trim.fastq.gz ERR2036630_P2.trim.fastq.gz ERR2036630_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2036631_1.fastq.gz  ERR2036631_2.fastq.gz ERR2036631_P1.trim.fastq.gz ERR2036631_S1.trim.fastq.gz ERR2036631_P2.trim.fastq.gz ERR2036631_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2036632_1.fastq.gz  ERR2036632_2.fastq.gz ERR2036632_P1.trim.fastq.gz ERR2036632_S1.trim.fastq.gz ERR2036632_P2.trim.fastq.gz ERR2036632_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2036633_1.fastq.gz  ERR2036633_2.fastq.gz ERR2036633_P1.trim.fastq.gz ERR2036633_S1.trim.fastq.gz ERR2036633_P2.trim.fastq.gz ERR2036633_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2117288_1.fastq.gz  ERR2117288_2.fastq.gz ERR2117288_P1.trim.fastq.gz ERR2117288_S1.trim.fastq.gz ERR2117288_P2.trim.fastq.gz ERR2117288_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2117289_1.fastq.gz  ERR2117289_2.fastq.gz ERR2117289_P1.trim.fastq.gz ERR2117289_S1.trim.fastq.gz ERR2117289_P2.trim.fastq.gz ERR2117289_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2117290_1.fastq.gz  ERR2117290_2.fastq.gz ERR2117290_P1.trim.fastq.gz ERR2117290_S1.trim.fastq.gz ERR2117290_P2.trim.fastq.gz ERR2117290_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2117291_1.fastq.gz  ERR2117291_2.fastq.gz ERR2117291_P1.trim.fastq.gz ERR2117291_S1.trim.fastq.gz ERR2117291_P2.trim.fastq.gz ERR2117291_S2.trim.fastq.gz
+java -jar $TRIMMOMATIC_HOME/trimmomatic.jar PE -threads 2 ERR2117292_1.fastq.gz  ERR2117292_2.fastq.gz ERR2117292_P1.trim.fastq.gz ERR2117292_S1.trim.fastq.gz ERR2117292_P2.trim.fastq.gz ERR2117292_S2.trim.fastq.gz
