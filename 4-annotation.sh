@@ -3,7 +3,7 @@
 #SBATCH -p core
 #SBATCH -n 2
 #SBATCH -t 00:30:00
-#SBATCH -J assembly_evaluation
+#SBATCH -J genome_annotation
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user Marina.Motamerlo.2433@student.uu.se
 # Load modules
