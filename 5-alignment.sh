@@ -10,5 +10,5 @@
 module load bioinfo-tools
 module load bwa
 # Your commands
-bwa index -p DNA_alignment /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta
+bwa index /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta -p DNA_alignment
 bwa mem -t 2 /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta assembly/DNA_raw_assembly.contigs.fasta > alignment.sam
