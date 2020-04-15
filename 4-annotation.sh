@@ -10,4 +10,4 @@
 module load bioinfo-tools
 module load prokka
 # Your commands
-prokka assembly/DNA_raw_assembly.contigs.fasta --outdir annotation/prokka_annotation --prefix DNA_annotated
+prokka assembly/DNA_raw_assembly.contigs.fasta --outdir prokka --prefix DNA_annotated --force --addgenes --genus Leptospirillum --species ferriphilum --strain DSM_14647 --gram neg --usegenus --proteins Leptospirillum
