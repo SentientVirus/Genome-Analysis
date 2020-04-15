@@ -12,7 +12,6 @@ module load bwa
 module load samtools
 module load htseq
 # Your commands
-bwa index /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta
 bwa mem -t 4 /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta trimmomatic/ERR2036629_P1.trim.fastq.gz trimmomatic/ERR2036629_P2.trim.fastq.gz  | samtools sort | htseq-count -t CDS -i ID -f bam -s no -r pos - lferr_no_genome.gff > ERR2036629.txt
 bwa mem -t 4 /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta trimmomatic/ERR2036630_P1.trim.fastq.gz trimmomatic/ERR2036630_P2.trim.fastq.gz  | samtools sort | htseq-count -t CDS -i ID -f bam -s no -r pos - lferr_no_genome.gff > ERR2036630.txt
 bwa mem -t 4 /proj/g2020008/3_Christel_2017/reference/OBMB01.fasta trimmomatic/ERR2036631_P1.trim.fastq.gz trimmomatic/ERR2036631_P2.trim.fastq.gz  | samtools sort | htseq-count -t CDS -i ID -f bam -s no -r pos - lferr_no_genome.gff > ERR2036631.txt
