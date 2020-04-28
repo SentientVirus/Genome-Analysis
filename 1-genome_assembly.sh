@@ -10,4 +10,4 @@
 module load bioinfo-tools
 module load canu
 # Your commands
-canu maxThreads=2 -d project -p DNA_raw_assembly genomeSize=2.5m stopOnReadQuality=false -pacbio-raw 3_Christel_2017/DNA_raw_data/*
+canu maxThreads=2 -d assembly -p DNA_raw_assembly genomeSize=2.5m stopOnReadQuality=false -pacbio-raw 3_Christel_2017/DNA_raw_data/*
