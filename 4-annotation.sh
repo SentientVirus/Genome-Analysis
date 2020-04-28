@@ -10,4 +10,8 @@
 module load bioinfo-tools
 module load prokka
 # Your commands
+<<<<<<< HEAD
 prokka assembly/DNA_corrected2.fasta --outdir prokka --prefix DNA_annotated --force --addgenes --genus Leptospirillum --species ferriphilum --strain DSM_14647 --gram negative --usegenus --protein Lept.fasta
+=======
+prokka assembly/DNA_corrected2.fasta --outdir prokka --prefix DNA_annotated --force --addgenes --genus Leptospirillum --species ferriphilum --strain DSM_14647 --gram negative --usegenus
+>>>>>>> a9d7452... Removed non-esential parts
