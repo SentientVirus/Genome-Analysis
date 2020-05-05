@@ -11,7 +11,6 @@ dds <- DESeqDataSetFromMatrix(countData=countData,
                               design=~Type, tidy = TRUE)
 dds <- DESeq(dds)
 res <- results(dds)
-head(results(dds, tidy=TRUE))
 summary(res)
 res <- res[order(res$padj),]
 head(res)
