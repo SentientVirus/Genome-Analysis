@@ -6,8 +6,8 @@ countData <- read.csv('data_CDS.csv', header = TRUE, sep = ";")
 head(countData)
 metaData <- read.csv('../metadata.csv', header = TRUE, sep = ";")
 metaData
-dds <- DESeqDataSetFromMatrix(countData=countData, 
-                              colData=metaData, 
+dds <- DESeqDataSetFromMatrix(countData=countData,
+                              colData=metaData,
                               design=~Type, tidy = TRUE)
 dds <- DESeq(dds)
 res <- results(dds)
