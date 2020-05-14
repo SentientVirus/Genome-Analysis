@@ -2,7 +2,7 @@ library(DESeq2)
 library(ggplot2)
 directory <- "F:/Master_Uppsala/Year_1/Semester_2/Genome_Analysis/Project"
 setwd(directory)
-countData <- read.csv('data_CDS.csv', header = TRUE, sep = ";")
+countData <- read.csv('input_files/data_CDS.csv', header = TRUE, sep = ";")
 head(countData)
 metaData <- read.csv('../metadata.csv', header = TRUE, sep = ";")
 metaData
