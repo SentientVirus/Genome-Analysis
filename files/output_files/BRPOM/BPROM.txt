@@ -1,0 +1,12 @@
+>Flagellin                                                                      
+ Length of sequence-       660
+ Threshold for promoters -  0.20
+ Number of predicted promoters -      1
+ Promoter Pos:    272 LDF-  1.57
+ -10 box at pos.    257 GGGCATGAT Score    49
+ -35 box at pos.    237 TGGAAG    Score    17
+
+ Oligonucleotides from known TF binding sites:
+
+ For promoter at    272:
+     rpoD17:  ACAGGAAT at position     276 Score -   8
