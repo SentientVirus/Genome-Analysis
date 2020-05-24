@@ -1,1 +1,1 @@
-
+There are three main folders: one containing relevant input and output files (since, because of memory limitations in Uppmax, all files that were obtained could not be included in GitHub), one containing some resulting plots (except for FastQC plots, which are in the files folder, zipped alongside the other FastQC output files) and one containing the code for batch jobs. Out of the three, only the files folder is further structured, it contains subfolders for input and output files, which in turn contain subfolders indicated where were the files used.
