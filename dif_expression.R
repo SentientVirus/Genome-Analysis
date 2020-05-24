@@ -59,22 +59,24 @@ mtext("Continuous", side=1, line=3, at=-4)
 mtext("Mineral", side=1, line=3, at=4)
 atp <- subset(annotations, Category=="ATP synthase", select=CDS)$CDS
 chem <- subset(annotations, Category=="Chemotaxis", select=CDS)$CDS
+hom <- subset(annotations, Category=="pH homeostasis", select=CDS)$CDS
 met <- subset(annotations, Category=="Metal resistance", select=CDS)$CDS
 mot <- subset(annotations, Category=="Motility", select=CDS)$CDS
 nad <- subset(annotations, Category=="NADH dehydrogenase", select=CDS)$CDS
 nif <- subset(annotations, Category=="Nitrogen fixation", select=CDS)$CDS
 pol <- subset(annotations, Category=="Polysaccharide", select=CDS)$CDS
 tca <- subset(annotations, Category=="TCA cycle", select=CDS)$CDS
+legend("center", pch= 3, cex=0.8, legend=c("ATP synthase", "Chemotaxis", "Homeostasis", "Metal resistance", "Motility", "NADH DH", "Nitrogen fixation", "Polysaccharide", "TCA cycle"),
+       col=c("red", "orange", "gold", "yellow", "green", "cyan", "blue", "purple", "violet"))
 with(res[atp,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="red"))
 with(res[chem,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="orange"))
+with(res[hom,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="gold"))
 with(res[met,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="yellow"))
 with(res[mot,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="green"))
 with(res[nad,], points(log2FoldChange, -log10(padj), pch = 3,cex = 1.0, col="cyan"))
 with(res[nif,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="blue"))
 with(res[pol,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="purple"))
 with(res[tca,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="violet"))
-legend("center", pch= 3, cex=0.8, legend=c("ATP synthase", "Chemotaxis", "Metal resistance", "Motility", "NADH DH", "Nitrogen fixation", "Polysaccharide", "TCA cycle"),
-       col=c("red", "orange", "yellow", "green", "cyan", "blue", "purple", "violet"))
 
 
 # PCA plot
