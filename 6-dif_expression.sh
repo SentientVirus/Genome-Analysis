@@ -9,7 +9,6 @@
 # Load modules
 module load bioinfo-tools
 module load bwa
-module load samtools
 module load htseq
 # Your commands
 bwa index assembly/DNA_raw_assembly.contigs.fasta
