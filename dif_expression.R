@@ -1,5 +1,6 @@
 library(DESeq2)
 library(ggplot2)
+library(dplyr)
 directory <- "F:/Master_Uppsala/Year_1/Semester_2/Genome_Analysis/Project"
 setwd(directory)
 countData <- read.csv('files/input_files/DeSeq2/data_CDS.csv', header = TRUE, sep = ";")
@@ -67,8 +68,8 @@ nad <- subset(annotations, Category=="NADH dehydrogenase", select=CDS)$CDS
 nif <- subset(annotations, Category=="Nitrogen fixation", select=CDS)$CDS
 pol <- subset(annotations, Category=="Polysaccharide", select=CDS)$CDS
 tca <- subset(annotations, Category=="TCA cycle", select=CDS)$CDS
-legend("center", pch= 3, cex=0.8, legend=c("ATP synthase", "Chemotaxis", "Homeostasis", "Metal resistance", "Motility", "NADH DH", "Nitrogen fixation", "Polysaccharide", "TCA cycle"),
-       col=c("red", "orange", "gold", "yellow", "green", "cyan", "blue", "purple", "violet"))
+legend("center", pch= 3, cex=0.8, legend=c("ATP synthase", "c-di-GMP", "Chemotaxis", "Homeostasis", "Metal resistance", "Motility", "NADH DH", "Nitrogen fixation", "Polysaccharide", "TCA cycle"),
+       col=c("red", "orange", "gold", "yellow", "green", "cyan", "dodger blue", "blue", "purple", "violet"))
 with(res[atp,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="red"))
 with(res[gmp,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="orange"))
 with(res[chem,], points(log2FoldChange, -log10(padj), pch = 3, cex = 1.0, col="gold"))
