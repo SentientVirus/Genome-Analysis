@@ -1,0 +1,3410 @@
+
+<!-- saved from url=(0049)http://embnet.ccg.unam.mx/rsat/oligo-analysis.cgi -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-US" xml:lang="en-US"><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+
+<script type="text/javascript">
+ <!-- 
+var stIsIE = /*@cc_on!@*/false;
+
+sorttable = {
+  init: function() {
+    // quit if this function has already been called
+    if (arguments.callee.done) return;
+    // flag this function so we don't do the same thing twice
+    arguments.callee.done = true;
+    // kill the timer
+    if (_timer) clearInterval(_timer);
+    
+    if (!document.createElement || !document.getElementsByTagName) return;
+    
+    sorttable.DATE_RE = /^(\d\d?)[\/\.-](\d\d?)[\/\.-]((\d\d)?\d\d)$/;
+    
+    forEach(document.getElementsByTagName('table'), function(table) {
+      if (table.className.search(/\bsortable\b/) != -1) {
+        sorttable.makeSortable(table);
+      }
+    });
+    
+  },
+  
+  makeSortable: function(table) {
+    if (table.getElementsByTagName('thead').length == 0) {
+      // table doesn't have a tHead. Since it should have, create one and
+      // put the first table row in it.
+      the = document.createElement('thead');
+      the.appendChild(table.rows[0]);
+      table.insertBefore(the,table.firstChild);
+    }
+    // Safari doesn't support table.tHead, sigh
+    if (table.tHead == null) table.tHead = table.getElementsByTagName('thead')[0];
+    
+    if (table.tHead.rows.length != 1) return; // can't cope with two header rows
+    
+    // Sorttable v1 put rows with a class of "sortbottom" at the bottom (as
+    // "total" rows, for example). This is B&R, since what you're supposed
+    // to do is put them in a tfoot. So, if there are sortbottom rows,
+    // for backwards compatibility, move them to tfoot (creating it if needed).
+    sortbottomrows = [];
+    for (var i=0; i<table.rows.length; i++) {
+      if (table.rows[i].className.search(/\bsortbottom\b/) != -1) {
+        sortbottomrows[sortbottomrows.length] = table.rows[i];
+      }
+    }
+    if (sortbottomrows) {
+      if (table.tFoot == null) {
+        // table doesn't have a tfoot. Create one.
+        tfo = document.createElement('tfoot');
+        table.appendChild(tfo);
+      }
+      for (var i=0; i<sortbottomrows.length; i++) {
+        tfo.appendChild(sortbottomrows[i]);
+      }
+      delete sortbottomrows;
+    }
+    
+    // work through each column and calculate its type
+    headrow = table.tHead.rows[0].cells;
+    for (var i=0; i<headrow.length; i++) {
+      // manually override the type with a sorttable_type attribute
+      if (!headrow[i].className.match(/\bsorttable_nosort\b/)) { // skip this col
+        mtch = headrow[i].className.match(/\bsorttable_([a-z0-9]+)\b/);
+        if (mtch) { override = mtch[1]; }
+	      if (mtch && typeof sorttable["sort_"+override] == 'function') {
+	        headrow[i].sorttable_sortfunction = sorttable["sort_"+override];
+	      } else {
+	        headrow[i].sorttable_sortfunction = sorttable.guessType(table,i);
+	      }
+	      // make it clickable to sort
+	      headrow[i].sorttable_columnindex = i;
+	      headrow[i].sorttable_tbody = table.tBodies[0];
+	      dean_addEvent(headrow[i],"click", function(e) {
+
+          if (this.className.search(/\bsorttable_sorted\b/) != -1) {
+            // if we're already sorted by this column, just 
+            // reverse the table, which is quicker
+            sorttable.reverse(this.sorttable_tbody);
+            this.className = this.className.replace('sorttable_sorted',
+                                                    'sorttable_sorted_reverse');
+            this.removeChild(document.getElementById('sorttable_sortfwdind'));
+            sortrevind = document.createElement('span');
+            sortrevind.id = "sorttable_sortrevind";
+            sortrevind.innerHTML = stIsIE ? '&nbsp<font face="webdings">5</font>' : '&nbsp;&#x25B4;';
+            this.appendChild(sortrevind);
+            return;
+          }
+          if (this.className.search(/\bsorttable_sorted_reverse\b/) != -1) {
+            // if we're already sorted by this column in reverse, just 
+            // re-reverse the table, which is quicker
+            sorttable.reverse(this.sorttable_tbody);
+            this.className = this.className.replace('sorttable_sorted_reverse',
+                                                    'sorttable_sorted');
+            this.removeChild(document.getElementById('sorttable_sortrevind'));
+            sortfwdind = document.createElement('span');
+            sortfwdind.id = "sorttable_sortfwdind";
+            sortfwdind.innerHTML = stIsIE ? '&nbsp<font face="webdings">6</font>' : '&nbsp;&#x25BE;';
+            this.appendChild(sortfwdind);
+            return;
+          }
+          
+          // remove sorttable_sorted classes
+          theadrow = this.parentNode;
+          forEach(theadrow.childNodes, function(cell) {
+            if (cell.nodeType == 1) { // an element
+              cell.className = cell.className.replace('sorttable_sorted_reverse','');
+              cell.className = cell.className.replace('sorttable_sorted','');
+            }
+          });
+          sortfwdind = document.getElementById('sorttable_sortfwdind');
+          if (sortfwdind) { sortfwdind.parentNode.removeChild(sortfwdind); }
+          sortrevind = document.getElementById('sorttable_sortrevind');
+          if (sortrevind) { sortrevind.parentNode.removeChild(sortrevind); }
+          
+          this.className += ' sorttable_sorted';
+          sortfwdind = document.createElement('span');
+          sortfwdind.id = "sorttable_sortfwdind";
+          sortfwdind.innerHTML = stIsIE ? '&nbsp<font face="webdings">6</font>' : '&nbsp;&#x25BE;';
+          this.appendChild(sortfwdind);
+
+	        // build an array to sort. This is a Schwartzian transform thing,
+	        // i.e., we "decorate" each row with the actual sort key,
+	        // sort based on the sort keys, and then put the rows back in order
+	        // which is a lot faster because you only do getInnerText once per row
+	        row_array = [];
+	        col = this.sorttable_columnindex;
+	        rows = this.sorttable_tbody.rows;
+	        for (var j=0; j<rows.length; j++) {
+	          row_array[row_array.length] = [sorttable.getInnerText(rows[j].cells[col]), rows[j]];
+	        }
+	        /* If you want a stable sort, uncomment the following line */
+	        //sorttable.shaker_sort(row_array, this.sorttable_sortfunction);
+	        /* and comment out this one */
+	        row_array.sort(this.sorttable_sortfunction);
+	        
+	        tb = this.sorttable_tbody;
+	        for (var j=0; j<row_array.length; j++) {
+	          tb.appendChild(row_array[j][1]);
+	        }
+	        
+	        delete row_array;
+	      });
+	    }
+    }
+  },
+  
+  guessType: function(table, column) {
+    // guess the type of a column based on its first non-blank row
+    sortfn = sorttable.sort_alpha;
+    for (var i=0; i<table.tBodies[0].rows.length; i++) {
+      text = sorttable.getInnerText(table.tBodies[0].rows[i].cells[column]);
+      if (text != '') {
+        if (text.match(/^-?[£$¤]?[\d,.]+%?$/)||text.match(/^\d+((\.|,)\d+)?(E|e)(\+|\-)\d+/)) {
+          return sorttable.sort_numeric;
+        }
+        // check for a date: dd/mm/yyyy or dd/mm/yy 
+        // can have / or . or - as separator
+        // can be mm/dd as well
+        possdate = text.match(sorttable.DATE_RE)
+        if (possdate) {
+          // looks like a date
+          first = parseInt(possdate[1]);
+          second = parseInt(possdate[2]);
+          if (first > 12) {
+            // definitely dd/mm
+            return sorttable.sort_ddmm;
+          } else if (second > 12) {
+            return sorttable.sort_mmdd;
+          } else {
+            // looks like a date, but we can't tell which, so assume
+            // that it's dd/mm (English imperialism!) and keep looking
+            sortfn = sorttable.sort_ddmm;
+          }
+        }
+      }
+    }
+    return sortfn;
+  },
+  
+  getInnerText: function(node) {
+    // gets the text we want to use for sorting for a cell.
+    // strips leading and trailing whitespace.
+    // this is *not* a generic getInnerText function; it's special to sorttable.
+    // for example, you can override the cell text with a customkey attribute.
+    // it also gets .value for <input> fields.
+    
+    hasInputs = (typeof node.getElementsByTagName == 'function') &&
+                 node.getElementsByTagName('input').length;
+    
+    if (node.getAttribute("sorttable_customkey") != null) {
+      return node.getAttribute("sorttable_customkey");
+    }
+    else if (typeof node.textContent != 'undefined' && !hasInputs) {
+      return node.textContent.replace(/^\s+|\s+$/g, '');
+    }
+    else if (typeof node.innerText != 'undefined' && !hasInputs) {
+      return node.innerText.replace(/^\s+|\s+$/g, '');
+    }
+    else if (typeof node.text != 'undefined' && !hasInputs) {
+      return node.text.replace(/^\s+|\s+$/g, '');
+    }
+    else {
+      switch (node.nodeType) {
+        case 3:
+          if (node.nodeName.toLowerCase() == 'input') {
+            return node.value.replace(/^\s+|\s+$/g, '');
+          }
+        case 4:
+          return node.nodeValue.replace(/^\s+|\s+$/g, '');
+          break;
+        case 1:
+        case 11:
+          var innerText = '';
+          for (var i = 0; i < node.childNodes.length; i++) {
+            innerText += sorttable.getInnerText(node.childNodes[i]);
+          }
+          return innerText.replace(/^\s+|\s+$/g, '');
+          break;
+        default:
+          return '';
+      }
+    }
+  },
+  
+  reverse: function(tbody) {
+    // reverse the rows in a tbody
+    newrows = [];
+    for (var i=0; i<tbody.rows.length; i++) {
+      newrows[newrows.length] = tbody.rows[i];
+    }
+    for (var i=newrows.length-1; i>=0; i--) {
+       tbody.appendChild(newrows[i]);
+    }
+    delete newrows;
+  },
+  
+  /* sort functions
+     each sort function takes two parameters, a and b
+     you are comparing a[0] and b[0] */
+  /* Numeric order */
+  sort_numeric: function(a,b) {
+	aa = parseFloat(a[0].replace(/[^0-9.\-eE]/g,''));
+	if (isNaN(aa)) aa = 0;
+	bb = parseFloat(b[0].replace(/[^0-9.\-eE]/g,''));
+	if (isNaN(bb)) bb = 0;
+	return aa-bb;
+    },
+//   sort_numeric: function(a,b) {
+//     aa = parseFloat(a[0].replace(/[^0-9.-eE]/g,''));
+//     if (isNaN(aa)) aa = 0;
+//     bb = parseFloat(b[0].replace(/[^0-9.-eE]/g,'')); 
+//     if (isNaN(bb)) bb = 0;    
+//     return aa-bb;
+//   },
+
+  /* alphabetical order */
+  sort_alpha: function(a,b) {
+    if (a[0]==b[0]) return 0;
+    if (a[0]<b[0]) return -1;
+    return 1;
+  },
+
+  /* sort dates formatted as ddmm (day first, month after) */
+  sort_ddmm: function(a,b) {
+    mtch = a[0].match(sorttable.DATE_RE);
+    y = mtch[3]; m = mtch[2]; d = mtch[1];
+    if (m.length == 1) m = '0'+m;
+    if (d.length == 1) d = '0'+d;
+    dt1 = y+m+d;
+    mtch = b[0].match(sorttable.DATE_RE);
+    y = mtch[3]; m = mtch[2]; d = mtch[1];
+    if (m.length == 1) m = '0'+m;
+    if (d.length == 1) d = '0'+d;
+    dt2 = y+m+d;
+    if (dt1==dt2) return 0;
+    if (dt1<dt2) return -1;
+    return 1;
+  },
+
+  /* sort dates formatted as mmdd (month first, day after) */
+  sort_mmdd: function(a,b) {
+    mtch = a[0].match(sorttable.DATE_RE);
+    y = mtch[3]; d = mtch[2]; m = mtch[1];
+    if (m.length == 1) m = '0'+m;
+    if (d.length == 1) d = '0'+d;
+    dt1 = y+m+d;
+    mtch = b[0].match(sorttable.DATE_RE);
+    y = mtch[3]; d = mtch[2]; m = mtch[1];
+    if (m.length == 1) m = '0'+m;
+    if (d.length == 1) d = '0'+d;
+    dt2 = y+m+d;
+    if (dt1==dt2) return 0;
+    if (dt1<dt2) return -1;
+    return 1;
+  },
+  
+  shaker_sort: function(list, comp_func) {
+    // A stable sort function to allow multi-level sorting of data
+    // see: http://en.wikipedia.org/wiki/Cocktail_sort
+    // thanks to Joseph Nahmias
+    var b = 0;
+    var t = list.length - 1;
+    var swap = true;
+
+    while(swap) {
+        swap = false;
+        for(var i = b; i < t; ++i) {
+            if ( comp_func(list[i], list[i+1]) > 0 ) {
+                var q = list[i]; list[i] = list[i+1]; list[i+1] = q;
+                swap = true;
+            }
+        } // for
+        t--;
+
+        if (!swap) break;
+
+        for(var i = t; i > b; --i) {
+            if ( comp_func(list[i], list[i-1]) < 0 ) {
+                var q = list[i]; list[i] = list[i-1]; list[i-1] = q;
+                swap = true;
+            }
+        } // for
+        b++;
+
+    } // while(swap)
+  }  
+}
+
+/* ******************************************************************
+   Supporting functions: bundled here to avoid depending on a library
+   ****************************************************************** */
+
+// Dean Edwards/Matthias Miller/John Resig
+
+/* for Mozilla/Opera9 */
+if (document.addEventListener) {
+    document.addEventListener("DOMContentLoaded", sorttable.init, false);
+}
+
+/* for Internet Explorer */
+/*@cc_on @*/
+/*@if (@_win32)
+    document.write("<script id=__ie_onload defer src=javascript:void(0)><\/script>");
+    var script = document.getElementById("__ie_onload");
+    script.onreadystatechange = function() {
+        if (this.readyState == "complete") {
+            sorttable.init(); // call the onload handler
+        }
+    };
+/*@end @*/
+
+/* for Safari */
+if (/WebKit/i.test(navigator.userAgent)) { // sniff
+    var _timer = setInterval(function() {
+        if (/loaded|complete/.test(document.readyState)) {
+            sorttable.init(); // call the onload handler
+        }
+    }, 10);
+}
+
+/* for other browsers */
+window.onload = sorttable.init;
+
+// written by Dean Edwards, 2005
+// with input from Tino Zijdel, Matthias Miller, Diego Perini
+
+// http://dean.edwards.name/weblog/2005/10/add-event/
+
+function dean_addEvent(element, type, handler) {
+	if (element.addEventListener) {
+		element.addEventListener(type, handler, false);
+	} else {
+		// assign each event handler a unique ID
+		if (!handler.$$guid) handler.$$guid = dean_addEvent.guid++;
+		// create a hash table of event types for the element
+		if (!element.events) element.events = {};
+		// create a hash table of event handlers for each element/event pair
+		var handlers = element.events[type];
+		if (!handlers) {
+			handlers = element.events[type] = {};
+			// store the existing event handler (if there is one)
+			if (element["on" + type]) {
+				handlers[0] = element["on" + type];
+			}
+		}
+		// store the event handler in the hash table
+		handlers[handler.$$guid] = handler;
+		// assign a global event handler to do all the work
+		element["on" + type] = handleEvent;
+	}
+};
+// a counter used to create unique IDs
+dean_addEvent.guid = 1;
+
+function removeEvent(element, type, handler) {
+	if (element.removeEventListener) {
+		element.removeEventListener(type, handler, false);
+	} else {
+		// delete the event handler from the hash table
+		if (element.events && element.events[type]) {
+			delete element.events[type][handler.$$guid];
+		}
+	}
+};
+
+function handleEvent(event) {
+	var returnValue = true;
+	// grab the event object (IE uses a global event object)
+	event = event || fixEvent(((this.ownerDocument || this.document || this).parentWindow || window).event);
+	// get a reference to the hash table of event handlers
+	var handlers = this.events[event.type];
+	// execute each event handler
+	for (var i in handlers) {
+		this.$$handleEvent = handlers[i];
+		if (this.$$handleEvent(event) === false) {
+			returnValue = false;
+		}
+	}
+	return returnValue;
+};
+
+function fixEvent(event) {
+	// add W3C standard event methods
+	event.preventDefault = fixEvent.preventDefault;
+	event.stopPropagation = fixEvent.stopPropagation;
+	return event;
+};
+fixEvent.preventDefault = function() {
+	this.returnValue = false;
+};
+fixEvent.stopPropagation = function() {
+  this.cancelBubble = true;
+}
+
+// Dean's forEach: http://dean.edwards.name/base/forEach.js
+/*
+	forEach, version 1.0
+	Copyright 2006, Dean Edwards
+	License: http://www.opensource.org/licenses/mit-license.php
+*/
+
+// array-like enumeration
+if (!Array.forEach) { // mozilla already supports this
+	Array.forEach = function(array, block, context) {
+		for (var i = 0; i < array.length; i++) {
+			block.call(context, array[i], i, array);
+		}
+	};
+}
+
+// generic enumeration
+Function.prototype.forEach = function(object, block, context) {
+	for (var key in object) {
+		if (typeof this.prototype[key] == "undefined") {
+			block.call(context, object[key], key, object);
+		}
+	}
+};
+
+// character enumeration
+String.forEach = function(string, block, context) {
+	Array.forEach(string.split(""), function(chr, index) {
+		block.call(context, chr, index, string);
+	});
+};
+
+// globally resolve forEach enumeration
+var forEach = function(object, block, context) {
+	if (object) {
+		var resolve = Object; // default
+		if (object instanceof Function) {
+			// functions have a "length" property
+			resolve = Function;
+		} else if (object.forEach instanceof Function) {
+			// the object implements a custom forEach method so use that
+			object.forEach(block, context);
+			return;
+		} else if (typeof object == "string") {
+			// the object is a string
+			resolve = String;
+		} else if (typeof object.length == "number") {
+			// the object is array-like
+			resolve = Array;
+		}
+		resolve.forEach(object, block, context);
+	}
+}
+
+// --> 
+</script>
+
+
+
+<title>RSAT : oligo-analysis result</title>
+<link rev="made" href="mailto:Jacques.van-Helden%5C%40univ-amu.fr">
+<link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/main.css" media="screen,projection,print">
+<link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/tabs.css" media="screen,projection,print">
+<link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/chosen.css" media="screen,projection,print">
+<link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/font-awesome.min.css" media="screen,projection,print">
+<script src="./RSAT _ oligo-analysis result_files/jquery.js.descarga" type="text/javascript"></script>
+<script src="./RSAT _ oligo-analysis result_files/RSAT_menu.js.descarga" type="text/javascript"></script>
+<script src="./RSAT _ oligo-analysis result_files/RSAT_tabs.js.descarga" type="text/javascript"></script>
+
+</head>
+<body class="results">
+<style>#page-content-wrapper{
+                    overflow: auto !important;
+                    display: block;
+                    height: 100%;
+                }</style><script>
+$(function(){
+if(typeof demo !== "undefined"){
+txt = demo.value;
+if(txt){
+document.getElementById("demo_descr").innerHTML = txt;
+}
+
+}
+});
+</script>        <link rel="stylesheet" href="./RSAT _ oligo-analysis result_files/simple-sidebar.css">
+        <link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/menu.css" media="screen,projection,print">
+        <link rel="stylesheet" href="./RSAT _ oligo-analysis result_files/colorbox.css">
+	<link rel="stylesheet" type="text/css" href="./RSAT _ oligo-analysis result_files/jquery-ui.css">
+         <script src="./RSAT _ oligo-analysis result_files/RSAT_menu.js.descarga" type="text/javascript"></script>
+        <script src="./RSAT _ oligo-analysis result_files/jquery.colorbox-min.js.descarga"></script>
+
+        <script>
+            $(document).ready(function(){
+                $('.iframe').colorbox({iframe:true, innerWidth:'70%', innerHeight:'70%'});
+		$("#menu-toggle").click(function(e){
+			e.preventDefault();
+			$("#wrapper").toggleClass('toggled');
+		});
+            });
+
+        </script>
+
+ 
+
+<div id="wrapper">
+                   <!-- Sidebar -->
+            <div id="sidebar-wrapper">
+             <div id="menubody" style="padding-top:10px">
+
+             <!--div id="tabmenu">
+             <ul class="rsat">
+                 <li><a class="active" href="index.php">RSAT</a></li>
+                 <li><a href="NeAT_home.php" >NeAT</a></li>
+                 <!--      <li><a href="http://www.rsat.eu/index_neat.html" target="_top">NeAT</a></li>>
+             </ul>
+             </div> < /#tabmenu -->
+             <div id="content" class="rsat">
+
+                 <div class="menu">
+                     <h2>
+                         <a href="http://embnet.ccg.unam.mx/rsat/index.php">
+                             <img src="./RSAT _ oligo-analysis result_files/RSAT_icon.jpg" style="max-width:150px;max-height:60px;" alt="RSAT server" border="0">
+                                 </a>
+                     </h2>
+                 </div>
+
+                 <!--      <p ><h2 style="border-style:solid;border-color:#cc6600;padding:0 10px;background-color:#F6E6CA;"><a href="http://www.eccb14.org/program/tutorials/cis-r" target="_blank">RSAT tutorial<br>at ECCB'14</a></h2></p>>
+
+                  <p ><h2 style="border-style:solid;border-color:#cc6600;padding:0 10px;background-color:#F6E6CA;">
+                  <a target='_blank' href="http://rsat.ulb.ac.be/eccb14/" >RSAT tutorial<br>at ECCB'14</a>
+                  </h2></p-->
+		<div style="padding:60px 0 0 10px;" align="center"><i class="fa fa-bar-chart  fa-lg"></i> <b>
+9639</b> <i>organisms</i></div>
+                <div>
+			<input type="search" id="searchfunc" placeholder="Search" class="searchmenu" onkeypress="searchfunc()" onkeyup="searchfunc()">
+		</div>
+		<div align="right">
+                     <b>New&nbsp;items</b><img src="./RSAT _ oligo-analysis result_files/onebit_49.png" class="new">
+                 </div>
+
+                 <div class="menu_expand" onclick="expandAll(&#39;14&#39;)" id="expand"> &gt; view all tools</div>
+
+                 <div class="menu">
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;1&#39;)" id="heading1">Genomes and genes</div>
+                     <div id="menu1" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/supported-organisms.cgi">supported organisms</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/gene-info_form.cgi"> gene information</a>
+     
+
+<a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/infer-operons_form.cgi"> infer operons</a><a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/get-orthologs_form.cgi">get orthologs</a>                         
+                         
+                         
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-genes_form.cgi">random gene selection</a>
+                     </div>
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;2&#39;)" id="heading2">Sequence tools <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></div>
+                     <div id="menu2" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/retrieve-seq_form.cgi">retrieve sequence</a>
+<span class="menu_item" style="cursor:default;color:lightgray"> retrieve EnsEMBL seq</span><span class="menu_item" style="cursor:default;color:lightgray"> fetch-sequences from UCSC</span>                         
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/retrieve-seq-bed_form.cgi">sequences from bed/gff/vcf  <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></a>
+                         <!--	  <a class="menu_item" href="http://www.rsat.eu/retrieve-ensembl-seq_form.cgi" >retrieve EnsEMBL seq</a>-->
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/purge-sequence_form.cgi">purge sequence</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/convert-seq_form.cgi">convert sequences</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-seq_form.cgi">random sequences</a>
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;12&#39;)" id="heading12">Matrix tools <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></div>
+                     <div id="menu12" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/retrieve-matrix_form.cgi">retrieve matrix <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/convert-matrix_form.cgi">convert matrix</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/compare-matrices_form.cgi">compare matrices</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/matrix-clustering_form.cgi">matrix-clustering <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/matrix-distrib_form.cgi">matrix distrib</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/matrix-quality_form.cgi">matrix quality</a>
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;11&#39;)" id="heading11">Build control sets</div>
+                     <div id="menu11" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-genes_form.cgi">random gene selection</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-seq_form.cgi">random sequences</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-genome-fragments_form.cgi">random genome fragments</a>
+                         <!--	  <a class="menu_item" href="http://www.rsat.eu/random-genome-fragments_form.cgi" >random genome fragments</a>-->
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-motif_form.cgi">random-motif</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/permute-matrix_form.cgi">permute-matrix</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-sites_form.cgi">random-sites</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/implant-sites_form.cgi">implant-sites</a>
+                     </div>
+                 </div>
+
+                 <div class="menu">
+                     <div class="menu_heading_open" onclick="toggleMenu(&#39;3&#39;)" id="heading3">Motif discovery</div>
+                     <div id="menu3" class="menu_collapsible" style="display: block;">
+                         <a class="menu_separator">strings</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/oligo-analysis_form.cgi">oligo-analysis (words)</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/oligo-diff_form.cgi">oligo-diff (words)</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/dyad-analysis_form.cgi">dyad-analysis (spaced pairs)</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/pattern-assembly_form.cgi">pattern assembly</a>
+                         <a class="menu_separator">strings with positional biais</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/position-analysis_form.cgi">position-analysis (words)</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/local-word-analysis_form.cgi">local-word-analysis (word and spaced pairs)</a>
+                         <a class="menu_separator">matrices</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/info-gibbs_form.cgi">info-gibbs</a>
+                         <!--<a class="menu_item" href="consensus_form.cgi" >consensus</a>
+                         	  <a class="menu_item" href="gibbs_form.cgi" >gibbs</a>-->
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;4&#39;)" id="heading4">Pattern matching <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></div>
+                     <div id="menu4" class="menu_collapsible">
+                         <a class="menu_separator">matrices</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/matrix-scan_form.cgi">matrix-scan<br>(full options)</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/matrix-scan-quick_form.cgi">matrix-scan (quick)</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/crer-scan_form.cgi">crer-scan</a>
+                         <!--<a class="menu_item" href="matrix-enrichment_form.cgi" >matrix-enrichment <img src="images/onebit_49.png" height="30" class="new"></img></a>-->
+                         <!--	  <a class="menu_item" href="patser_form.cgi" >patser [discontinued]</a>-->
+                         <!--	  <a class="menu_item" href="genome-scale-patser_form.cgi" >genome-scale patser [discontinued]</a>-->
+                         <a class="menu_separator">strings</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/dna-pattern_form.cgi">dna-pattern</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/genome-scale-dna-pattern_form.cgi">genome-scale dna-pattern</a>
+                     </div>
+                 </div>
+
+                 <div class="menu">
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;10&#39;)" id="heading10">Comparative genomics&nbsp; <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></div>
+                     <div id="menu10" class="menu_collapsible">
+<a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/get-orthologs_form.cgi">get orthologs</a>      
+                     
+                         <span class="menu_item" style="cursor:default;color:lightgray"> get orthologs-compara </span>                     
+                         
+                         
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/footprint-discovery_form.cgi">footprint-discovery</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/footprint-scan_form.cgi">footprint-scan <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new">
+                         </a>   
+
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;13&#39;)" id="heading13">NGS - ChIP-seq</div>
+                     <div id="menu13" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/peak-motifs_form.cgi">peak-motifs</a>
+                         <span class="menu_item" style="cursor:default;color:lightgray"> fetch-sequences from UCSC</span>                        <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/retrieve-seq-bed_form.cgi">sequences from bed/gff/vcf  <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></a>
+
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/random-genome-fragments_form.cgi">random genome fragments</a>
+                         <!--	  <a class="menu_item" href="random-genome-fragments_form.cgi" >random genome fragments</a>-->
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;9&#39;)" id="heading9">Genetic variations (Var-tools) <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></div>
+                     <div id="menu9" class="menu_collapsible">
+                     
+                     <span class="menu_item" style="cursor:default;color:lightgray"> Variation information </span>
+        <span class="menu_item" style="cursor:default;color:lightgray"> Retrieve variation sequences</span>
+        <span class="menu_item" style="cursor:default;color:lightgray"> Scan variations with motifs</span>                     
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/convert-variations_form.cgi">Convert variation formats <img src="./RSAT _ oligo-analysis result_files/onebit_49.png" height="30" class="new"></a>
+                     </div>
+                 </div>
+
+
+                 <div class="menu">
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;8&#39;)" id="heading8">Conversion/Utilities</div>
+                     <div id="menu8" class="menu_collapsible">
+                         <a class="menu_separator">Set comparisons / enrichment</a>
+                         <!--<a class="menu_item_last" href="compare_classes_form.php?menu=RSAT" >compare classes/clusters</a> -->
+                         <a class="menu_separator">Stats</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/classfreq_form.cgi">Frequency distribution</a>
+                         <a class="menu_separator">sequences</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/convert-seq_form.cgi">convert sequences</a>
+                         <a class="menu_separator">matrices</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/convert-matrix_form.cgi">convert matrix / logo</a>
+                         <a class="menu_separator">background models</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/create-background-model_form.cgi">create background</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/convert-background-model_form.cgi">convert background</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/seq-proba_form.cgi">sequence probability</a>
+                         <a class="menu_separator">features</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/convert-features_form.cgi">convert features</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/compare-features_form.cgi">compare features</a>
+                     </div>
+
+
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;5&#39;)" id="heading5">Drawing</div>
+                     <div id="menu5" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/feature-map_form.cgi">feature map</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/feature-map_form2.cgi">feature map 2</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/XYgraph_form.cgi">XY graph</a>
+                     </div>
+
+
+                 </div>
+
+                 <div class="menu">
+                     <div class="menu_heading_closed" onclick="toggleMenu(&#39;6&#39;)" id="heading6">SOAP Web services</div>
+                     <div id="menu6" class="menu_collapsible">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/htmllink.cgi?title=RSAT%20:%20Web%20services&amp;file=web_services.html">Programmatic interface to RSAT</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/htmllink.cgi?title=RSAT%20:%20Web%20services%20documentation&amp;file=web_services/RSATWS_documentation.xml">WSDL Documentation</a>
+                         <!--a class="menu_item" href="web_services/RSATWS.wsdl" target=tools>WSDL</a>
+                          <a class="menu_item" href="ws_clients.html" target=tools>Clients</a>
+                          <a class="menu_item" href="ws_workflows.html" target=tools>Taverna workflows </a-->
+                     </div>
+
+                 </div>
+
+                 <div class="menu">
+
+
+                     <div class="menu_heading_open" onclick="toggleMenu(&#39;7&#39;)" id="heading7">Help &amp; Contact</div>
+                         <div id="menu7" class="menu_collapsible_display">
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/people.php">RSAT team</a>
+                         <a class="menu_item" href="http://rsa-tools.github.io/teaching/index.html" target="_blank">Training material</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/tutorials.php">Tutorials</a>
+
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/publications.cgi">Publications</a>
+                         <a class="menu_item" href="http://embnet.ccg.unam.mx/rsat/credits.php">Credits</a>
+                         <a class="menu_item" href="http://teaching.rsat.eu/download-request_form.cgi">Download</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/htmllink.cgi?title=RSAT-motif&amp;file=motif_databases/">Motif databases</a>
+                         <a class="menu_item_last" href="http://embnet.ccg.unam.mx/rsat/htmllink.cgi?title=RSAT-Data&amp;file=data/">Data</a>
+
+                        </div>
+
+                         </div>
+
+                        <a target="_top" href="http://embnet.ccg.unam.mx/rsat/oligo-analysis.cgi#" style="font-size:3px;visibility:hidden">bug/dont understand</a>
+
+                    </div>
+               </div>
+
+            </div><!-- /#sidebar-wrapper -->
+<div class="container" id="page-content-wrapper"><span class="menu-toggle"><a href="http://embnet.ccg.unam.mx/rsat/oligo-analysis.cgi#" id="menu-toggle"><i class="fa fa-bars fa-2x" style="color:green;"></i></a></span><h3 align="center"><a href="http://embnet.ccg.unam.mx/rsat/RSAT_home.cgi">RSAT</a> - oligo-analysis result</h3><blockquote class="information">
+<font color="#006600"><b>Information: </b>Uploaded file	lept_sequence.fasta	2652613 bytes</font>
+</blockquote><br><hr size="3">
+<b>Server command</b><pre>$RSAT/perl-scripts/purge-sequence -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7 -format fasta -o $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -seqtype dna;$RSAT/perl-scripts/oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta  -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible  -seqtype dna -markov 2 -pseudo 0.01 -l 6 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab; $RSAT/perl-scripts/oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta  -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible  -seqtype dna -markov 2 -pseudo 0.01 -l 7 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab; $RSAT/perl-scripts/oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta  -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible  -seqtype dna -markov 2 -pseudo 0.01 -l 8 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab; cat $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta  -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible  -seqtype dna -markov 2 -pseudo 0.01
+</pre>
+<blockquote class="information">
+<font color="#006600"><b>Information: </b>One or several button(s) will appear at the bottom of this page, allowing you to send the result as input for a subsequent query.</font>
+</blockquote><br><hr size="3">
+<h2>Result</h2><pre> Job started 2020_05_20.095756
+ Job done    2020_05_20.095756
+ Job started 2020_05_20.095758
+ Job done    2020_05_20.095758
+ Job started 2020_05_20.095804
+ Job done    2020_05_20.095804
+ oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible -seqtype dna -markov 2 -pseudo 0.01 -l 6 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab
+ Citation: van Helden et al. (1998). J Mol Biol 281(5), 827-42. 
+ Program version              	1.169
+ Quick counting mode          
+ Detection of over-represented words (right-tail test)
+ Oligomer length              	6
+ Input file                   	$RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged
+ Input format                 	fasta
+ Output file                  	$RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab
+ Discard overlapping matches
+ Counted on both strands
+ 	grouped by pairs of reverse complements
+ Background model             	Markov
+ Background estimation method 	Markov model estimated from input sequences
+ Markov chain order           	2
+ Pseudo-frequency             	0.01
+ Pseudo-frequency per oligo   	4.80769230769231e-06
+ Sequence type                	DNA
+ Nb of sequences              	1
+ Sum of sequence lengths      	2567031
+ discarded residues           	NA (quick mode)	 (other letters than ACGT)
+ discarded occurrences        	NA (quick mode)	 (contain discarded residues)
+ nb possible positions        	NA (quick mode)
+ total oligo occurrences      	2518332
+ total overlapping occurrences	19619
+ total non overlapping occ    	2498713
+ alphabet size                	4
+ nb possible oligomers        	2080
+ oligomers tested for significance	2080
+ Sequences:
+	tig00000001	2567031
+
+ column headers
+	1	seq            	oligomer sequence
+	2	id             	oligomer identifier
+	3	exp_freq       	expected relative frequency
+	4	occ            	observed occurrences
+	5	exp_occ        	expected occurrences
+	6	occ_P          	occurrence probability (binomial)
+	7	occ_E          	E-value for occurrences (binomial)
+	8	occ_sig        	occurrence significance (binomial)
+	9	rank           	rank
+	10	ovl_occ        	number of overlapping occurrences (discarded from the count)
+	11	forbocc        	forbidden positions (to avoid self-overlap)
+</pre>
+
+<table class="sortable" cellspacing="1" cellpadding="3" border="0"><thead><tr valign="top">
+<th align="left"><tt>seq</tt></th>
+<th align="left"><tt>id</tt></th>
+<th align="left"><tt>exp_freq</tt></th>
+<th align="left"><tt>occ</tt></th>
+<th align="left"><tt>exp_occ</tt></th>
+<th align="left"><tt>occ_P</tt></th>
+<th align="left"><tt>occ_E</tt></th>
+<th align="left"><tt>occ_sig</tt></th>
+<th align="left"><tt>rank</tt></th>
+<th align="left"><tt>ovl_occ</tt></th>
+<th align="left"><tt>forbocc</tt></th>
+</tr></thead>
+<tbody>
+
+<tr valign="top">
+<td><tt>ccagaa</tt></td>
+<td><tt>ccagaa|ttctgg</tt></td>
+<td><tt>0.0011509992546</tt></td>
+<td><tt>5042</tt></td>
+<td><tt>2898.60</tt></td>
+<td><tt>3e-284</tt></td>
+<td><tt>5e-281</tt></td>
+<td><tt>280.26</tt></td>
+<td><tt>1</tt></td>
+<td><tt>0</tt></td>
+<td><tt>25210</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccgga</tt></td>
+<td><tt>tccgga|tccgga</tt></td>
+<td><tt>0.0014156863923</tt></td>
+<td><tt>5679</tt></td>
+<td><tt>3565.17</tt></td>
+<td><tt>4e-233</tt></td>
+<td><tt>7e-230</tt></td>
+<td><tt>229.14</tt></td>
+<td><tt>2</tt></td>
+<td><tt>0</tt></td>
+<td><tt>28395</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctctcc</tt></td>
+<td><tt>ctctcc|ggagag</tt></td>
+<td><tt>0.0008588839146</tt></td>
+<td><tt>3641</tt></td>
+<td><tt>2162.95</tt></td>
+<td><tt>3e-184</tt></td>
+<td><tt>6e-181</tt></td>
+<td><tt>180.25</tt></td>
+<td><tt>3</tt></td>
+<td><tt>8</tt></td>
+<td><tt>18205</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgacaa</tt></td>
+<td><tt>cgacaa|ttgtcg</tt></td>
+<td><tt>0.0005402811246</tt></td>
+<td><tt>2382</tt></td>
+<td><tt>1360.61</tt></td>
+<td><tt>3e-138</tt></td>
+<td><tt>6e-135</tt></td>
+<td><tt>134.23</tt></td>
+<td><tt>4</tt></td>
+<td><tt>9</tt></td>
+<td><tt>11910</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gggaga</tt></td>
+<td><tt>gggaga|tctccc</tt></td>
+<td><tt>0.0011064136146</tt></td>
+<td><tt>4118</tt></td>
+<td><tt>2786.32</tt></td>
+<td><tt>7e-123</tt></td>
+<td><tt>1e-119</tt></td>
+<td><tt>118.85</tt></td>
+<td><tt>5</tt></td>
+<td><tt>0</tt></td>
+<td><tt>20590</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcgcc</tt></td>
+<td><tt>atcgcc|ggcgat</tt></td>
+<td><tt>0.0005801731746</tt></td>
+<td><tt>2417</tt></td>
+<td><tt>1461.07</tt></td>
+<td><tt>1e-115</tt></td>
+<td><tt>2e-112</tt></td>
+<td><tt>111.66</tt></td>
+<td><tt>6</tt></td>
+<td><tt>14</tt></td>
+<td><tt>12085</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaa</tt></td>
+<td><tt>ccggaa|ttccgg</tt></td>
+<td><tt>0.0025510938846</tt></td>
+<td><tt>8279</tt></td>
+<td><tt>6424.50</tt></td>
+<td><tt>4e-109</tt></td>
+<td><tt>7e-106</tt></td>
+<td><tt>105.13</tt></td>
+<td><tt>7</tt></td>
+<td><tt>643</tt></td>
+<td><tt>41395</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgggag</tt></td>
+<td><tt>cgggag|ctcccg</tt></td>
+<td><tt>0.0010860344646</tt></td>
+<td><tt>3950</tt></td>
+<td><tt>2735.00</tt></td>
+<td><tt>2e-105</tt></td>
+<td><tt>4e-102</tt></td>
+<td><tt>101.41</tt></td>
+<td><tt>8</tt></td>
+<td><tt>25</tt></td>
+<td><tt>19750</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgatca</tt></td>
+<td><tt>cgatca|tgatcg</tt></td>
+<td><tt>0.0006277248546</tt></td>
+<td><tt>2515</tt></td>
+<td><tt>1580.82</tt></td>
+<td><tt>6e-104</tt></td>
+<td><tt>1e-100</tt></td>
+<td><tt>99.88</tt></td>
+<td><tt>9</tt></td>
+<td><tt>8</tt></td>
+<td><tt>12575</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atccgg</tt></td>
+<td><tt>atccgg|ccggat</tt></td>
+<td><tt>0.0019728725046</tt></td>
+<td><tt>6560</tt></td>
+<td><tt>4968.35</tt></td>
+<td><tt>4e-103</tt></td>
+<td><tt>8e-100</tt></td>
+<td><tt>99.09</tt></td>
+<td><tt>10</tt></td>
+<td><tt>446</tt></td>
+<td><tt>32800</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cccgga</tt></td>
+<td><tt>cccgga|tccggg</tt></td>
+<td><tt>0.0020590935846</tt></td>
+<td><tt>6740</tt></td>
+<td><tt>5185.48</tt></td>
+<td><tt>5.5e-95</tt></td>
+<td><tt>1.2e-91</tt></td>
+<td><tt>90.94</tt></td>
+<td><tt>11</tt></td>
+<td><tt>0</tt></td>
+<td><tt>33700</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>attgcc</tt></td>
+<td><tt>attgcc|ggcaat</tt></td>
+<td><tt>0.0003604862346</tt></td>
+<td><tt>1595</tt></td>
+<td><tt>907.82</tt></td>
+<td><tt>2.3e-94</tt></td>
+<td><tt>4.9e-91</tt></td>
+<td><tt>90.31</tt></td>
+<td><tt>12</tt></td>
+<td><tt>2</tt></td>
+<td><tt>7975</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctcttc</tt></td>
+<td><tt>ctcttc|gaagag</tt></td>
+<td><tt>0.0009544654446</tt></td>
+<td><tt>3447</tt></td>
+<td><tt>2403.66</tt></td>
+<td><tt>4.8e-89</tt></td>
+<td><tt>1.0e-85</tt></td>
+<td><tt>85.00</tt></td>
+<td><tt>13</tt></td>
+<td><tt>2</tt></td>
+<td><tt>17235</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccaga</tt></td>
+<td><tt>tccaga|tctgga</tt></td>
+<td><tt>0.0012770658546</tt></td>
+<td><tt>4401</tt></td>
+<td><tt>3216.08</tt></td>
+<td><tt>2e-87</tt></td>
+<td><tt>4.2e-84</tt></td>
+<td><tt>83.38</tt></td>
+<td><tt>14</tt></td>
+<td><tt>0</tt></td>
+<td><tt>22005</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctgaa</tt></td>
+<td><tt>cctgaa|ttcagg</tt></td>
+<td><tt>0.0009441209346</tt></td>
+<td><tt>3382</tt></td>
+<td><tt>2377.61</tt></td>
+<td><tt>8.3e-84</tt></td>
+<td><tt>1.7e-80</tt></td>
+<td><tt>79.76</tt></td>
+<td><tt>15</tt></td>
+<td><tt>0</tt></td>
+<td><tt>16910</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggac</tt></td>
+<td><tt>ccggac|gtccgg</tt></td>
+<td><tt>0.0017793176046</tt></td>
+<td><tt>5793</tt></td>
+<td><tt>4480.91</tt></td>
+<td><tt>8.2e-79</tt></td>
+<td><tt>1.7e-75</tt></td>
+<td><tt>74.77</tt></td>
+<td><tt>16</tt></td>
+<td><tt>301</tt></td>
+<td><tt>28965</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>caggag</tt></td>
+<td><tt>caggag|ctcctg</tt></td>
+<td><tt>0.0007939656546</tt></td>
+<td><tt>2893</tt></td>
+<td><tt>1999.47</tt></td>
+<td><tt>1.7e-78</tt></td>
+<td><tt>3.5e-75</tt></td>
+<td><tt>74.45</tt></td>
+<td><tt>17</tt></td>
+<td><tt>0</tt></td>
+<td><tt>14465</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcgac</tt></td>
+<td><tt>atcgac|gtcgat</tt></td>
+<td><tt>0.0005601821046</tt></td>
+<td><tt>2146</tt></td>
+<td><tt>1410.72</tt></td>
+<td><tt>5.1e-74</tt></td>
+<td><tt>1.1e-70</tt></td>
+<td><tt>69.98</tt></td>
+<td><tt>18</tt></td>
+<td><tt>7</tt></td>
+<td><tt>10730</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>accgga</tt></td>
+<td><tt>accgga|tccggt</tt></td>
+<td><tt>0.0013566687846</tt></td>
+<td><tt>4521</tt></td>
+<td><tt>3416.54</tt></td>
+<td><tt>9.3e-73</tt></td>
+<td><tt>1.9e-69</tt></td>
+<td><tt>68.71</tt></td>
+<td><tt>19</tt></td>
+<td><tt>17</tt></td>
+<td><tt>22605</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttgtc</tt></td>
+<td><tt>cttgtc|gacaag</tt></td>
+<td><tt>0.0005984396646</tt></td>
+<td><tt>2256</tt></td>
+<td><tt>1507.07</tt></td>
+<td><tt>2.2e-72</tt></td>
+<td><tt>4.6e-69</tt></td>
+<td><tt>68.34</tt></td>
+<td><tt>20</tt></td>
+<td><tt>2</tt></td>
+<td><tt>11280</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgggaa</tt></td>
+<td><tt>cgggaa|ttcccg</tt></td>
+<td><tt>0.0017336122746</tt></td>
+<td><tt>5601</tt></td>
+<td><tt>4365.81</tt></td>
+<td><tt>4.5e-72</tt></td>
+<td><tt>9.4e-69</tt></td>
+<td><tt>68.03</tt></td>
+<td><tt>21</tt></td>
+<td><tt>33</tt></td>
+<td><tt>28005</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggag</tt></td>
+<td><tt>ccggag|ctccgg</tt></td>
+<td><tt>0.0015962636346</tt></td>
+<td><tt>5187</tt></td>
+<td><tt>4019.92</tt></td>
+<td><tt>8.6e-70</tt></td>
+<td><tt>1.8e-66</tt></td>
+<td><tt>65.75</tt></td>
+<td><tt>22</tt></td>
+<td><tt>233</tt></td>
+<td><tt>25935</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>attgtc</tt></td>
+<td><tt>attgtc|gacaat</tt></td>
+<td><tt>0.0004489199646</tt></td>
+<td><tt>1772</tt></td>
+<td><tt>1130.53</tt></td>
+<td><tt>1.3e-69</tt></td>
+<td><tt>2.7e-66</tt></td>
+<td><tt>65.58</tt></td>
+<td><tt>23</tt></td>
+<td><tt>4</tt></td>
+<td><tt>8860</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cagggc</tt></td>
+<td><tt>cagggc|gccctg</tt></td>
+<td><tt>0.0005988673446</tt></td>
+<td><tt>2231</tt></td>
+<td><tt>1508.15</tt></td>
+<td><tt>8.1e-68</tt></td>
+<td><tt>1.7e-64</tt></td>
+<td><tt>63.78</tt></td>
+<td><tt>24</tt></td>
+<td><tt>6</tt></td>
+<td><tt>11155</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cggcaa</tt></td>
+<td><tt>cggcaa|ttgccg</tt></td>
+<td><tt>0.0006281475846</tt></td>
+<td><tt>2321</tt></td>
+<td><tt>1581.88</tt></td>
+<td><tt>8.2e-68</tt></td>
+<td><tt>1.7e-64</tt></td>
+<td><tt>63.77</tt></td>
+<td><tt>25</tt></td>
+<td><tt>8</tt></td>
+<td><tt>11605</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tcgaca</tt></td>
+<td><tt>tcgaca|tgtcga</tt></td>
+<td><tt>0.0005726333346</tt></td>
+<td><tt>2144</tt></td>
+<td><tt>1442.08</tt></td>
+<td><tt>8.8e-67</tt></td>
+<td><tt>1.8e-63</tt></td>
+<td><tt>62.74</tt></td>
+<td><tt>26</tt></td>
+<td><tt>66</tt></td>
+<td><tt>10720</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gccaga</tt></td>
+<td><tt>gccaga|tctggc</tt></td>
+<td><tt>0.0007465565346</tt></td>
+<td><tt>2638</tt></td>
+<td><tt>1880.08</tt></td>
+<td><tt>3.1e-61</tt></td>
+<td><tt>6.5e-58</tt></td>
+<td><tt>57.19</tt></td>
+<td><tt>27</tt></td>
+<td><tt>7</tt></td>
+<td><tt>13190</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>accaga</tt></td>
+<td><tt>accaga|tctggt</tt></td>
+<td><tt>0.0006146014146</tt></td>
+<td><tt>2233</tt></td>
+<td><tt>1547.77</tt></td>
+<td><tt>3.4e-60</tt></td>
+<td><tt>7.1e-57</tt></td>
+<td><tt>56.15</tt></td>
+<td><tt>28</tt></td>
+<td><tt>2</tt></td>
+<td><tt>11165</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gaaaaa</tt></td>
+<td><tt>gaaaaa|tttttc</tt></td>
+<td><tt>0.0024736362846</tt></td>
+<td><tt>7511</tt></td>
+<td><tt>6229.44</tt></td>
+<td><tt>4e-56</tt></td>
+<td><tt>8.3e-53</tt></td>
+<td><tt>52.08</tt></td>
+<td><tt>29</tt></td>
+<td><tt>0</tt></td>
+<td><tt>37555</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tggcaa</tt></td>
+<td><tt>tggcaa|ttgcca</tt></td>
+<td><tt>0.0003740502246</tt></td>
+<td><tt>1457</tt></td>
+<td><tt>941.98</tt></td>
+<td><tt>1.4e-54</tt></td>
+<td><tt>2.8e-51</tt></td>
+<td><tt>50.55</tt></td>
+<td><tt>30</tt></td>
+<td><tt>0</tt></td>
+<td><tt>7285</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ggagaa</tt></td>
+<td><tt>ggagaa|ttctcc</tt></td>
+<td><tt>0.0013696526346</tt></td>
+<td><tt>4396</tt></td>
+<td><tt>3449.24</tt></td>
+<td><tt>3.1e-54</tt></td>
+<td><tt>6.4e-51</tt></td>
+<td><tt>50.19</tt></td>
+<td><tt>31</tt></td>
+<td><tt>0</tt></td>
+<td><tt>21980</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggga</tt></td>
+<td><tt>ccggga|tcccgg</tt></td>
+<td><tt>0.0020591430846</tt></td>
+<td><tt>6319</tt></td>
+<td><tt>5185.61</tt></td>
+<td><tt>1.2e-52</tt></td>
+<td><tt>2.5e-49</tt></td>
+<td><tt>48.60</tt></td>
+<td><tt>32</tt></td>
+<td><tt>337</tt></td>
+<td><tt>31595</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>aggaga</tt></td>
+<td><tt>aggaga|tctcct</tt></td>
+<td><tt>0.0008729369646</tt></td>
+<td><tt>2949</tt></td>
+<td><tt>2198.35</tt></td>
+<td><tt>1.5e-52</tt></td>
+<td><tt>3.2e-49</tt></td>
+<td><tt>48.50</tt></td>
+<td><tt>33</tt></td>
+<td><tt>4</tt></td>
+<td><tt>14745</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gacaac</tt></td>
+<td><tt>gacaac|gttgtc</tt></td>
+<td><tt>0.0004601237946</tt></td>
+<td><tt>1710</tt></td>
+<td><tt>1158.74</tt></td>
+<td><tt>7.1e-52</tt></td>
+<td><tt>1.5e-48</tt></td>
+<td><tt>47.83</tt></td>
+<td><tt>34</tt></td>
+<td><tt>0</tt></td>
+<td><tt>8550</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgccag</tt></td>
+<td><tt>cgccag|ctggcg</tt></td>
+<td><tt>0.0005502553746</tt></td>
+<td><tt>1985</tt></td>
+<td><tt>1385.73</tt></td>
+<td><tt>7.5e-52</tt></td>
+<td><tt>1.6e-48</tt></td>
+<td><tt>47.81</tt></td>
+<td><tt>35</tt></td>
+<td><tt>1</tt></td>
+<td><tt>9925</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>taaaaa</tt></td>
+<td><tt>taaaaa|ttttta</tt></td>
+<td><tt>0.0004170152346</tt></td>
+<td><tt>1575</tt></td>
+<td><tt>1050.18</tt></td>
+<td><tt>1.4e-51</tt></td>
+<td><tt>3.0e-48</tt></td>
+<td><tt>47.53</tt></td>
+<td><tt>36</tt></td>
+<td><tt>9</tt></td>
+<td><tt>7875</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttgcc</tt></td>
+<td><tt>cttgcc|ggcaag</tt></td>
+<td><tt>0.0004800485346</tt></td>
+<td><tt>1763</tt></td>
+<td><tt>1208.92</tt></td>
+<td><tt>1.6e-50</tt></td>
+<td><tt>3.4e-47</tt></td>
+<td><tt>46.47</tt></td>
+<td><tt>37</tt></td>
+<td><tt>2</tt></td>
+<td><tt>8815</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcgtc</tt></td>
+<td><tt>atcgtc|gacgat</tt></td>
+<td><tt>0.0006761903046</tt></td>
+<td><tt>2353</tt></td>
+<td><tt>1702.87</tt></td>
+<td><tt>2.1e-50</tt></td>
+<td><tt>4.4e-47</tt></td>
+<td><tt>46.35</tt></td>
+<td><tt>38</tt></td>
+<td><tt>15</tt></td>
+<td><tt>11765</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctgtc</tt></td>
+<td><tt>cctgtc|gacagg</tt></td>
+<td><tt>0.0009467642346</tt></td>
+<td><tt>3141</tt></td>
+<td><tt>2384.27</tt></td>
+<td><tt>1.1e-49</tt></td>
+<td><tt>2.3e-46</tt></td>
+<td><tt>45.64</tt></td>
+<td><tt>39</tt></td>
+<td><tt>5</tt></td>
+<td><tt>15705</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>acgatc</tt></td>
+<td><tt>acgatc|gatcgt</tt></td>
+<td><tt>0.0006262388646</tt></td>
+<td><tt>2197</tt></td>
+<td><tt>1577.08</tt></td>
+<td><tt>2.3e-49</tt></td>
+<td><tt>4.7e-46</tt></td>
+<td><tt>45.33</tt></td>
+<td><tt>40</tt></td>
+<td><tt>57</tt></td>
+<td><tt>10985</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcagg</tt></td>
+<td><tt>atcagg|cctgat</tt></td>
+<td><tt>0.0007315144746</tt></td>
+<td><tt>2500</tt></td>
+<td><tt>1842.20</tt></td>
+<td><tt>4.1e-48</tt></td>
+<td><tt>8.5e-45</tt></td>
+<td><tt>44.07</tt></td>
+<td><tt>41</tt></td>
+<td><tt>5</tt></td>
+<td><tt>12500</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ggacaa</tt></td>
+<td><tt>ggacaa|ttgtcc</tt></td>
+<td><tt>0.0008574296046</tt></td>
+<td><tt>2868</tt></td>
+<td><tt>2159.29</tt></td>
+<td><tt>4.9e-48</tt></td>
+<td><tt>1.0e-44</tt></td>
+<td><tt>43.99</tt></td>
+<td><tt>42</tt></td>
+<td><tt>0</tt></td>
+<td><tt>14340</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gggcaa</tt></td>
+<td><tt>gggcaa|ttgccc</tt></td>
+<td><tt>0.0004896713346</tt></td>
+<td><tt>1777</tt></td>
+<td><tt>1233.15</tt></td>
+<td><tt>5e-48</tt></td>
+<td><tt>1.0e-44</tt></td>
+<td><tt>43.99</tt></td>
+<td><tt>43</tt></td>
+<td><tt>0</tt></td>
+<td><tt>8885</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>acaatc</tt></td>
+<td><tt>acaatc|gattgt</tt></td>
+<td><tt>0.0004160282046</tt></td>
+<td><tt>1548</tt></td>
+<td><tt>1047.70</tt></td>
+<td><tt>2e-47</tt></td>
+<td><tt>4.3e-44</tt></td>
+<td><tt>43.37</tt></td>
+<td><tt>44</tt></td>
+<td><tt>0</tt></td>
+<td><tt>7740</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cagaag</tt></td>
+<td><tt>cagaag|cttctg</tt></td>
+<td><tt>0.0009641793246</tt></td>
+<td><tt>3171</tt></td>
+<td><tt>2428.12</tt></td>
+<td><tt>2.9e-47</tt></td>
+<td><tt>6.0e-44</tt></td>
+<td><tt>43.22</tt></td>
+<td><tt>45</tt></td>
+<td><tt>0</tt></td>
+<td><tt>15855</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>agggag</tt></td>
+<td><tt>agggag|ctccct</tt></td>
+<td><tt>0.0006674090046</tt></td>
+<td><tt>2303</tt></td>
+<td><tt>1680.76</tt></td>
+<td><tt>4.6e-47</tt></td>
+<td><tt>9.6e-44</tt></td>
+<td><tt>43.02</tt></td>
+<td><tt>46</tt></td>
+<td><tt>10</tt></td>
+<td><tt>11515</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ggaaga</tt></td>
+<td><tt>ggaaga|tcttcc</tt></td>
+<td><tt>0.0017312392446</tt></td>
+<td><tt>5339</tt></td>
+<td><tt>4359.84</tt></td>
+<td><tt>7.2e-47</tt></td>
+<td><tt>1.5e-43</tt></td>
+<td><tt>42.83</tt></td>
+<td><tt>47</tt></td>
+<td><tt>0</tt></td>
+<td><tt>26695</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cggaca</tt></td>
+<td><tt>cggaca|tgtccg</tt></td>
+<td><tt>0.0011851443546</tt></td>
+<td><tt>3800</tt></td>
+<td><tt>2984.59</tt></td>
+<td><tt>8.5e-47</tt></td>
+<td><tt>1.8e-43</tt></td>
+<td><tt>42.75</tt></td>
+<td><tt>48</tt></td>
+<td><tt>22</tt></td>
+<td><tt>19000</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atggcg</tt></td>
+<td><tt>atggcg|cgccat</tt></td>
+<td><tt>0.0004862588046</tt></td>
+<td><tt>1748</tt></td>
+<td><tt>1224.56</tt></td>
+<td><tt>4.3e-45</tt></td>
+<td><tt>8.9e-42</tt></td>
+<td><tt>41.05</tt></td>
+<td><tt>49</tt></td>
+<td><tt>9</tt></td>
+<td><tt>8740</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>aagagc</tt></td>
+<td><tt>aagagc|gctctt</tt></td>
+<td><tt>0.0005019166446</tt></td>
+<td><tt>1793</tt></td>
+<td><tt>1263.99</tt></td>
+<td><tt>9.6e-45</tt></td>
+<td><tt>2.0e-41</tt></td>
+<td><tt>40.70</tt></td>
+<td><tt>50</tt></td>
+<td><tt>3</tt></td>
+<td><tt>8965</tt></td>
+</tr>
+
+</tbody><tfoot></tfoot></table><pre> Host name	sinik
+ Job started	2020-05-20.095755
+ Job done	2020-05-20.095757
+ Seconds	1.46
+	user	1.46
+	system	0.03
+	cuser	0.61
+	csystem	0.06
+ oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible -seqtype dna -markov 2 -pseudo 0.01 -l 7 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab
+ Citation: van Helden et al. (1998). J Mol Biol 281(5), 827-42. 
+ Program version              	1.169
+ Quick counting mode          
+ Detection of over-represented words (right-tail test)
+ Oligomer length              	7
+ Input file                   	$RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged
+ Input format                 	fasta
+ Output file                  	$RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab
+ Discard overlapping matches
+ Counted on both strands
+ 	grouped by pairs of reverse complements
+ Background model             	Markov
+ Background estimation method 	Markov model estimated from input sequences
+ Markov chain order           	2
+ Pseudo-frequency             	0.01
+ Pseudo-frequency per oligo   	1.220703125e-06
+ Sequence type                	DNA
+ Nb of sequences              	1
+ Sum of sequence lengths      	2567031
+ discarded residues           	NA (quick mode)	 (other letters than ACGT)
+ discarded occurrences        	NA (quick mode)	 (contain discarded residues)
+ nb possible positions        	NA (quick mode)
+ total oligo occurrences      	2518017
+ total overlapping occurrences	16961
+ total non overlapping occ    	2501056
+ alphabet size                	4
+ nb possible oligomers        	8192
+ oligomers tested for significance	8192
+ Sequences:
+	tig00000001	2567031
+
+ column headers
+	1	seq            	oligomer sequence
+	2	id             	oligomer identifier
+	3	exp_freq       	expected relative frequency
+	4	occ            	observed occurrences
+	5	exp_occ        	expected occurrences
+	6	occ_P          	occurrence probability (binomial)
+	7	occ_E          	E-value for occurrences (binomial)
+	8	occ_sig        	occurrence significance (binomial)
+	9	rank           	rank
+	10	ovl_occ        	number of overlapping occurrences (discarded from the count)
+	11	forbocc        	forbidden positions (to avoid self-overlap)
+</pre>
+
+<table class="sortable" cellspacing="1" cellpadding="3" border="0"><thead><tr valign="top">
+<th align="left"><tt>seq</tt></th>
+<th align="left"><tt>id</tt></th>
+<th align="left"><tt>exp_freq</tt></th>
+<th align="left"><tt>occ</tt></th>
+<th align="left"><tt>exp_occ</tt></th>
+<th align="left"><tt>occ_P</tt></th>
+<th align="left"><tt>occ_E</tt></th>
+<th align="left"><tt>occ_sig</tt></th>
+<th align="left"><tt>rank</tt></th>
+<th align="left"><tt>ovl_occ</tt></th>
+<th align="left"><tt>forbocc</tt></th>
+</tr></thead>
+<tbody>
+
+<tr valign="top">
+<td><tt>tccagaa</tt></td>
+<td><tt>tccagaa|ttctgga</tt></td>
+<td><tt>0.0004122162662</tt></td>
+<td><tt>2032</tt></td>
+<td><tt>1037.97</tt></td>
+<td><tt>1e-163</tt></td>
+<td><tt>9e-160</tt></td>
+<td><tt>159.03</tt></td>
+<td><tt>1</tt></td>
+<td><tt>0</tt></td>
+<td><tt>12192</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctctccc</tt></td>
+<td><tt>ctctccc|gggagag</tt></td>
+<td><tt>0.0002239370763</tt></td>
+<td><tt>1248</tt></td>
+<td><tt>563.88</tt></td>
+<td><tt>6e-136</tt></td>
+<td><tt>5e-132</tt></td>
+<td><tt>131.30</tt></td>
+<td><tt>2</tt></td>
+<td><tt>1</tt></td>
+<td><tt>7488</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaag</tt></td>
+<td><tt>ccagaag|cttctgg</tt></td>
+<td><tt>0.0002939904663</tt></td>
+<td><tt>1472</tt></td>
+<td><tt>740.27</tt></td>
+<td><tt>4e-124</tt></td>
+<td><tt>4e-120</tt></td>
+<td><tt>119.44</tt></td>
+<td><tt>3</tt></td>
+<td><tt>0</tt></td>
+<td><tt>8832</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tcgacaa</tt></td>
+<td><tt>tcgacaa|ttgtcga</tt></td>
+<td><tt>0.0001388594463</tt></td>
+<td><tt>791</tt></td>
+<td><tt>349.65</tt></td>
+<td><tt>4.2e-91</tt></td>
+<td><tt>3.4e-87</tt></td>
+<td><tt>86.47</tt></td>
+<td><tt>4</tt></td>
+<td><tt>9</tt></td>
+<td><tt>4746</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaca</tt></td>
+<td><tt>ccggaca|tgtccgg</tt></td>
+<td><tt>0.0004544437262</tt></td>
+<td><tt>1868</tt></td>
+<td><tt>1144.30</tt></td>
+<td><tt>1.1e-85</tt></td>
+<td><tt>9.2e-82</tt></td>
+<td><tt>81.04</tt></td>
+<td><tt>5</tt></td>
+<td><tt>22</tt></td>
+<td><tt>11208</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tcccgga</tt></td>
+<td><tt>tcccgga|tccggga</tt></td>
+<td><tt>0.0007382123762</tt></td>
+<td><tt>2748</tt></td>
+<td><tt>1858.83</tt></td>
+<td><tt>8.3e-83</tt></td>
+<td><tt>6.8e-79</tt></td>
+<td><tt>78.17</tt></td>
+<td><tt>6</tt></td>
+<td><tt>0</tt></td>
+<td><tt>16488</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaac</tt></td>
+<td><tt>ccagaac|gttctgg</tt></td>
+<td><tt>0.0002255557263</tt></td>
+<td><tt>1079</tt></td>
+<td><tt>567.95</tt></td>
+<td><tt>4e-81</tt></td>
+<td><tt>3.3e-77</tt></td>
+<td><tt>76.48</tt></td>
+<td><tt>7</tt></td>
+<td><tt>1</tt></td>
+<td><tt>6474</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccgggag</tt></td>
+<td><tt>ccgggag|ctcccgg</tt></td>
+<td><tt>0.0004161930962</tt></td>
+<td><tt>1712</tt></td>
+<td><tt>1047.98</tt></td>
+<td><tt>6.7e-79</tt></td>
+<td><tt>5.4e-75</tt></td>
+<td><tt>74.26</tt></td>
+<td><tt>8</tt></td>
+<td><tt>25</tt></td>
+<td><tt>10272</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaag</tt></td>
+<td><tt>ccggaag|cttccgg</tt></td>
+<td><tt>0.0006518655662</tt></td>
+<td><tt>2458</tt></td>
+<td><tt>1641.41</tt></td>
+<td><tt>8.3e-79</tt></td>
+<td><tt>6.8e-75</tt></td>
+<td><tt>74.17</tt></td>
+<td><tt>9</tt></td>
+<td><tt>73</tt></td>
+<td><tt>14748</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctcttcc</tt></td>
+<td><tt>ctcttcc|ggaagag</tt></td>
+<td><tt>0.0003501363362</tt></td>
+<td><tt>1481</tt></td>
+<td><tt>881.65</tt></td>
+<td><tt>1.2e-75</tt></td>
+<td><tt>9.5e-72</tt></td>
+<td><tt>71.02</tt></td>
+<td><tt>10</tt></td>
+<td><tt>1</tt></td>
+<td><tt>8886</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgatcag</tt></td>
+<td><tt>cgatcag|ctgatcg</tt></td>
+<td><tt>0.0001924156743</tt></td>
+<td><tt>930</tt></td>
+<td><tt>484.51</tt></td>
+<td><tt>3.4e-72</tt></td>
+<td><tt>2.8e-68</tt></td>
+<td><tt>67.55</tt></td>
+<td><tt>11</tt></td>
+<td><tt>0</tt></td>
+<td><tt>5580</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tcgatca</tt></td>
+<td><tt>tcgatca|tgatcga</tt></td>
+<td><tt>0.0001613425442</tt></td>
+<td><tt>818</tt></td>
+<td><tt>406.26</tt></td>
+<td><tt>4.1e-72</tt></td>
+<td><tt>3.4e-68</tt></td>
+<td><tt>67.47</tt></td>
+<td><tt>12</tt></td>
+<td><tt>8</tt></td>
+<td><tt>4908</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgggaga</tt></td>
+<td><tt>cgggaga|tctcccg</tt></td>
+<td><tt>0.0003708827763</tt></td>
+<td><tt>1525</tt></td>
+<td><tt>933.89</tt></td>
+<td><tt>2.1e-70</tt></td>
+<td><tt>1.7e-66</tt></td>
+<td><tt>65.77</tt></td>
+<td><tt>13</tt></td>
+<td><tt>5</tt></td>
+<td><tt>9150</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ggagaga</tt></td>
+<td><tt>ggagaga|tctctcc</tt></td>
+<td><tt>0.0002931291663</tt></td>
+<td><tt>1258</tt></td>
+<td><tt>738.10</tt></td>
+<td><tt>7.8e-68</tt></td>
+<td><tt>6.4e-64</tt></td>
+<td><tt>63.19</tt></td>
+<td><tt>14</tt></td>
+<td><tt>0</tt></td>
+<td><tt>7548</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gccagaa</tt></td>
+<td><tt>gccagaa|ttctggc</tt></td>
+<td><tt>0.0002407126263</tt></td>
+<td><tt>1073</tt></td>
+<td><tt>606.12</tt></td>
+<td><tt>1.1e-65</tt></td>
+<td><tt>9.0e-62</tt></td>
+<td><tt>61.04</tt></td>
+<td><tt>15</tt></td>
+<td><tt>1</tt></td>
+<td><tt>6438</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaaa</tt></td>
+<td><tt>ccggaaa|tttccgg</tt></td>
+<td><tt>0.0009134958362</tt></td>
+<td><tt>3150</tt></td>
+<td><tt>2300.20</tt></td>
+<td><tt>2e-63</tt></td>
+<td><tt>1.6e-59</tt></td>
+<td><tt>58.78</tt></td>
+<td><tt>16</tt></td>
+<td><tt>93</tt></td>
+<td><tt>18900</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggaa</tt></td>
+<td><tt>tccggaa|ttccgga</tt></td>
+<td><tt>0.0009148204563</tt></td>
+<td><tt>3138</tt></td>
+<td><tt>2303.53</tt></td>
+<td><tt>2.9e-61</tt></td>
+<td><tt>2.4e-57</tt></td>
+<td><tt>56.62</tt></td>
+<td><tt>17</tt></td>
+<td><tt>643</tt></td>
+<td><tt>18828</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tcctgaa</tt></td>
+<td><tt>tcctgaa|ttcagga</tt></td>
+<td><tt>0.0003379256762</tt></td>
+<td><tt>1374</tt></td>
+<td><tt>850.90</tt></td>
+<td><tt>4.6e-61</tt></td>
+<td><tt>3.8e-57</tt></td>
+<td><tt>56.42</tt></td>
+<td><tt>18</tt></td>
+<td><tt>0</tt></td>
+<td><tt>8244</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgaccag</tt></td>
+<td><tt>cgaccag|ctggtcg</tt></td>
+<td><tt>0.0001636576593</tt></td>
+<td><tt>784</tt></td>
+<td><tt>412.09</tt></td>
+<td><tt>9.9e-60</tt></td>
+<td><tt>8.1e-56</tt></td>
+<td><tt>55.09</tt></td>
+<td><tt>19</tt></td>
+<td><tt>1</tt></td>
+<td><tt>4704</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctctcc</tt></td>
+<td><tt>cctctcc|ggagagg</tt></td>
+<td><tt>0.0002748290163</tt></td>
+<td><tt>1159</tt></td>
+<td><tt>692.02</tt></td>
+<td><tt>4.7e-59</tt></td>
+<td><tt>3.9e-55</tt></td>
+<td><tt>54.41</tt></td>
+<td><tt>20</tt></td>
+<td><tt>9</tt></td>
+<td><tt>6954</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaga</tt></td>
+<td><tt>ccggaga|tctccgg</tt></td>
+<td><tt>0.0005455356062</tt></td>
+<td><tt>1994</tt></td>
+<td><tt>1373.67</tt></td>
+<td><tt>1.3e-55</tt></td>
+<td><tt>1.1e-51</tt></td>
+<td><tt>50.97</tt></td>
+<td><tt>21</tt></td>
+<td><tt>23</tt></td>
+<td><tt>11964</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggatc</tt></td>
+<td><tt>ccggatc|gatccgg</tt></td>
+<td><tt>0.0007219100463</tt></td>
+<td><tt>2524</tt></td>
+<td><tt>1817.78</tt></td>
+<td><tt>2.1e-55</tt></td>
+<td><tt>1.7e-51</tt></td>
+<td><tt>50.76</tt></td>
+<td><tt>22</tt></td>
+<td><tt>161</tt></td>
+<td><tt>15144</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atccgga</tt></td>
+<td><tt>atccgga|tccggat</tt></td>
+<td><tt>0.0007072540863</tt></td>
+<td><tt>2480</tt></td>
+<td><tt>1780.88</tt></td>
+<td><tt>2.3e-55</tt></td>
+<td><tt>1.9e-51</tt></td>
+<td><tt>50.72</tt></td>
+<td><tt>23</tt></td>
+<td><tt>390</tt></td>
+<td><tt>14880</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggca</tt></td>
+<td><tt>tccggca|tgccgga</tt></td>
+<td><tt>0.0003547754762</tt></td>
+<td><tt>1396</tt></td>
+<td><tt>893.33</tt></td>
+<td><tt>1.3e-54</tt></td>
+<td><tt>1.1e-50</tt></td>
+<td><tt>49.98</tt></td>
+<td><tt>24</tt></td>
+<td><tt>0</tt></td>
+<td><tt>8376</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgacaag</tt></td>
+<td><tt>cgacaag|cttgtcg</tt></td>
+<td><tt>0.0001379817122</tt></td>
+<td><tt>670</tt></td>
+<td><tt>347.44</tt></td>
+<td><tt>3.2e-53</tt></td>
+<td><tt>2.6e-49</tt></td>
+<td><tt>48.59</tt></td>
+<td><tt>25</tt></td>
+<td><tt>2</tt></td>
+<td><tt>4020</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gatcgcc</tt></td>
+<td><tt>gatcgcc|ggcgatc</tt></td>
+<td><tt>0.0002115195063</tt></td>
+<td><tt>922</tt></td>
+<td><tt>532.61</tt></td>
+<td><tt>7.2e-53</tt></td>
+<td><tt>5.9e-49</tt></td>
+<td><tt>48.23</tt></td>
+<td><tt>26</tt></td>
+<td><tt>14</tt></td>
+<td><tt>5532</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaaa</tt></td>
+<td><tt>ccagaaa|tttctgg</tt></td>
+<td><tt>0.0004116390962</tt></td>
+<td><tt>1556</tt></td>
+<td><tt>1036.51</tt></td>
+<td><tt>3.4e-51</tt></td>
+<td><tt>2.8e-47</tt></td>
+<td><tt>46.55</tt></td>
+<td><tt>27</tt></td>
+<td><tt>0</tt></td>
+<td><tt>9336</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctcctcc</tt></td>
+<td><tt>ctcctcc|ggaggag</tt></td>
+<td><tt>0.0002881821362</tt></td>
+<td><tt>1162</tt></td>
+<td><tt>725.65</tt></td>
+<td><tt>2.4e-50</tt></td>
+<td><tt>1.9e-46</tt></td>
+<td><tt>45.71</tt></td>
+<td><tt>28</tt></td>
+<td><tt>49</tt></td>
+<td><tt>6972</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>accagaa</tt></td>
+<td><tt>accagaa|ttctggt</tt></td>
+<td><tt>0.0001980420422</tt></td>
+<td><tt>862</tt></td>
+<td><tt>498.67</tt></td>
+<td><tt>2.5e-49</tt></td>
+<td><tt>2.0e-45</tt></td>
+<td><tt>44.69</tt></td>
+<td><tt>29</tt></td>
+<td><tt>1</tt></td>
+<td><tt>5172</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>attctgg</tt></td>
+<td><tt>attctgg|ccagaat</tt></td>
+<td><tt>0.0002199948962</tt></td>
+<td><tt>934</tt></td>
+<td><tt>553.95</tt></td>
+<td><tt>4.4e-49</tt></td>
+<td><tt>3.6e-45</tt></td>
+<td><tt>44.44</tt></td>
+<td><tt>30</tt></td>
+<td><tt>0</tt></td>
+<td><tt>5604</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctccgga</tt></td>
+<td><tt>ctccgga|tccggag</tt></td>
+<td><tt>0.0005720260263</tt></td>
+<td><tt>2031</tt></td>
+<td><tt>1440.37</tt></td>
+<td><tt>7.3e-49</tt></td>
+<td><tt>5.9e-45</tt></td>
+<td><tt>44.23</tt></td>
+<td><tt>31</tt></td>
+<td><tt>233</tt></td>
+<td><tt>12186</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctggaag</tt></td>
+<td><tt>ctggaag|cttccag</tt></td>
+<td><tt>0.0003084850562</tt></td>
+<td><tt>1218</tt></td>
+<td><tt>776.77</tt></td>
+<td><tt>1.5e-48</tt></td>
+<td><tt>1.2e-44</tt></td>
+<td><tt>43.92</tt></td>
+<td><tt>32</tt></td>
+<td><tt>0</tt></td>
+<td><tt>7308</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctgatc</tt></td>
+<td><tt>cctgatc|gatcagg</tt></td>
+<td><tt>0.0002669961363</tt></td>
+<td><tt>1081</tt></td>
+<td><tt>672.30</tt></td>
+<td><tt>1e-47</tt></td>
+<td><tt>8.5e-44</tt></td>
+<td><tt>43.07</tt></td>
+<td><tt>33</tt></td>
+<td><tt>6</tt></td>
+<td><tt>6486</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>attgtcg</tt></td>
+<td><tt>attgtcg|cgacaat</tt></td>
+<td><tt>0.0001035904983</tt></td>
+<td><tt>527</tt></td>
+<td><tt>260.84</tt></td>
+<td><tt>1.4e-47</tt></td>
+<td><tt>1.2e-43</tt></td>
+<td><tt>42.93</tt></td>
+<td><tt>34</tt></td>
+<td><tt>1</tt></td>
+<td><tt>3162</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcgcca</tt></td>
+<td><tt>atcgcca|tggcgat</tt></td>
+<td><tt>0.0001153867443</tt></td>
+<td><tt>569</tt></td>
+<td><tt>290.55</tt></td>
+<td><tt>2.3e-47</tt></td>
+<td><tt>1.9e-43</tt></td>
+<td><tt>42.72</tt></td>
+<td><tt>35</tt></td>
+<td><tt>3</tt></td>
+<td><tt>3414</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>caggaga</tt></td>
+<td><tt>caggaga|tctcctg</tt></td>
+<td><tt>0.0002709185162</tt></td>
+<td><tt>1089</tt></td>
+<td><tt>682.18</tt></td>
+<td><tt>9.2e-47</tt></td>
+<td><tt>7.6e-43</tt></td>
+<td><tt>42.12</tt></td>
+<td><tt>36</tt></td>
+<td><tt>0</tt></td>
+<td><tt>6534</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccgggaa</tt></td>
+<td><tt>ccgggaa|ttcccgg</tt></td>
+<td><tt>0.0006651553262</tt></td>
+<td><tt>2275</tt></td>
+<td><tt>1674.87</tt></td>
+<td><tt>3.4e-44</tt></td>
+<td><tt>2.7e-40</tt></td>
+<td><tt>39.56</tt></td>
+<td><tt>37</tt></td>
+<td><tt>33</tt></td>
+<td><tt>13650</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggcaa</tt></td>
+<td><tt>ccggcaa|ttgccgg</tt></td>
+<td><tt>0.0002402453463</tt></td>
+<td><tt>977</tt></td>
+<td><tt>604.94</tt></td>
+<td><tt>5e-44</tt></td>
+<td><tt>4.1e-40</tt></td>
+<td><tt>39.39</tt></td>
+<td><tt>38</tt></td>
+<td><tt>8</tt></td>
+<td><tt>5862</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgacaac</tt></td>
+<td><tt>cgacaac|gttgtcg</tt></td>
+<td><tt>0.0001061788533</tt></td>
+<td><tt>524</tt></td>
+<td><tt>267.36</tt></td>
+<td><tt>7.4e-44</tt></td>
+<td><tt>6.1e-40</tt></td>
+<td><tt>39.22</tt></td>
+<td><tt>39</tt></td>
+<td><tt>1</tt></td>
+<td><tt>3144</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctgaac</tt></td>
+<td><tt>cctgaac|gttcagg</tt></td>
+<td><tt>0.0001850779923</tt></td>
+<td><tt>795</tt></td>
+<td><tt>466.03</tt></td>
+<td><tt>9.8e-44</tt></td>
+<td><tt>8.0e-40</tt></td>
+<td><tt>39.10</tt></td>
+<td><tt>40</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4770</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttctcc</tt></td>
+<td><tt>cttctcc|ggagaag</tt></td>
+<td><tt>0.0003501363362</tt></td>
+<td><tt>1321</tt></td>
+<td><tt>881.65</tt></td>
+<td><tt>2.1e-43</tt></td>
+<td><tt>1.8e-39</tt></td>
+<td><tt>38.76</tt></td>
+<td><tt>41</tt></td>
+<td><tt>1</tt></td>
+<td><tt>7926</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gacaatc</tt></td>
+<td><tt>gacaatc|gattgtc</tt></td>
+<td><tt>0.0001634418393</tt></td>
+<td><tt>719</tt></td>
+<td><tt>411.55</tt></td>
+<td><tt>6.9e-43</tt></td>
+<td><tt>5.6e-39</tt></td>
+<td><tt>38.25</tt></td>
+<td><tt>42</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4314</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gattgcc</tt></td>
+<td><tt>gattgcc|ggcaatc</tt></td>
+<td><tt>0.0001310211212</tt></td>
+<td><tt>607</tt></td>
+<td><tt>329.91</tt></td>
+<td><tt>1.4e-42</tt></td>
+<td><tt>1.2e-38</tt></td>
+<td><tt>37.93</tt></td>
+<td><tt>43</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3642</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>catcgcc</tt></td>
+<td><tt>catcgcc|ggcgatg</tt></td>
+<td><tt>0.0001530965372</tt></td>
+<td><tt>680</tt></td>
+<td><tt>385.50</tt></td>
+<td><tt>6.7e-42</tt></td>
+<td><tt>5.5e-38</tt></td>
+<td><tt>37.26</tt></td>
+<td><tt>44</tt></td>
+<td><tt>1</tt></td>
+<td><tt>4080</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gcgatca</tt></td>
+<td><tt>gcgatca|tgatcgc</tt></td>
+<td><tt>0.0001145963283</tt></td>
+<td><tt>547</tt></td>
+<td><tt>288.56</tt></td>
+<td><tt>7.2e-42</tt></td>
+<td><tt>5.9e-38</tt></td>
+<td><tt>37.23</tt></td>
+<td><tt>45</tt></td>
+<td><tt>1</tt></td>
+<td><tt>3282</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cagggag</tt></td>
+<td><tt>cagggag|ctccctg</tt></td>
+<td><tt>0.0002069714462</tt></td>
+<td><tt>854</tt></td>
+<td><tt>521.16</tt></td>
+<td><tt>8.1e-41</tt></td>
+<td><tt>6.7e-37</tt></td>
+<td><tt>36.18</tt></td>
+<td><tt>46</tt></td>
+<td><tt>0</tt></td>
+<td><tt>5124</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cccggac</tt></td>
+<td><tt>cccggac|gtccggg</tt></td>
+<td><tt>0.0004639200063</tt></td>
+<td><tt>1650</tt></td>
+<td><tt>1168.16</tt></td>
+<td><tt>2e-40</tt></td>
+<td><tt>1.6e-36</tt></td>
+<td><tt>35.79</tt></td>
+<td><tt>47</tt></td>
+<td><tt>1</tt></td>
+<td><tt>9900</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gtccgga</tt></td>
+<td><tt>gtccgga|tccggac</tt></td>
+<td><tt>0.0006377907362</tt></td>
+<td><tt>2162</tt></td>
+<td><tt>1605.97</tt></td>
+<td><tt>6.6e-40</tt></td>
+<td><tt>5.4e-36</tt></td>
+<td><tt>35.27</tt></td>
+<td><tt>48</tt></td>
+<td><tt>279</tt></td>
+<td><tt>12972</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>aggcgat</tt></td>
+<td><tt>aggcgat|atcgcct</tt></td>
+<td><tt>0.0001195521693</tt></td>
+<td><tt>557</tt></td>
+<td><tt>301.03</tt></td>
+<td><tt>7.4e-40</tt></td>
+<td><tt>6.1e-36</tt></td>
+<td><tt>35.22</tt></td>
+<td><tt>49</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3342</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>catccgg</tt></td>
+<td><tt>catccgg|ccggatg</tt></td>
+<td><tt>0.0005208004562</tt></td>
+<td><tt>1816</tt></td>
+<td><tt>1311.38</tt></td>
+<td><tt>7.9e-40</tt></td>
+<td><tt>6.5e-36</tt></td>
+<td><tt>35.19</tt></td>
+<td><tt>50</tt></td>
+<td><tt>25</tt></td>
+<td><tt>10896</tt></td>
+</tr>
+
+</tbody><tfoot></tfoot></table><pre> Host name	sinik
+ Job started	2020-05-20.095757
+ Job done	2020-05-20.095801
+ Seconds	3.08
+	user	3.08
+	system	0.05
+	cuser	0.67
+	csystem	0.06
+ oligo-analysis  -v 1 -sort -i $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged -format fasta -lth occ_sig 0 -uth rank 50 -return occ,proba,rank -2str -noov -quick_if_possible -seqtype dna -markov 2 -pseudo 0.01 -l 8 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab
+ Citation: van Helden et al. (1998). J Mol Biol 281(5), 827-42. 
+ Program version              	1.169
+ Quick counting mode          
+ Detection of over-represented words (right-tail test)
+ Oligomer length              	8
+ Input file                   	$RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged
+ Input format                 	fasta
+ Output file                  	$RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab
+ Discard overlapping matches
+ Counted on both strands
+ 	grouped by pairs of reverse complements
+ Background model             	Markov
+ Background estimation method 	Markov model estimated from input sequences
+ Markov chain order           	2
+ Pseudo-frequency             	0.01
+ Pseudo-frequency per oligo   	3.03988326848249e-07
+ Sequence type                	DNA
+ Nb of sequences              	1
+ Sum of sequence lengths      	2567031
+ discarded residues           	NA (quick mode)	 (other letters than ACGT)
+ discarded occurrences        	NA (quick mode)	 (contain discarded residues)
+ nb possible positions        	NA (quick mode)
+ total oligo occurrences      	2517847
+ total overlapping occurrences	4996
+ total non overlapping occ    	2512851
+ alphabet size                	4
+ nb possible oligomers        	32896
+ oligomers tested for significance	32797
+ Sequences:
+	tig00000001	2567031
+
+ column headers
+	1	seq            	oligomer sequence
+	2	id             	oligomer identifier
+	3	exp_freq       	expected relative frequency
+	4	occ            	observed occurrences
+	5	exp_occ        	expected occurrences
+	6	occ_P          	occurrence probability (binomial)
+	7	occ_E          	E-value for occurrences (binomial)
+	8	occ_sig        	occurrence significance (binomial)
+	9	rank           	rank
+	10	ovl_occ        	number of overlapping occurrences (discarded from the count)
+	11	forbocc        	forbidden positions (to avoid self-overlap)
+</pre>
+
+<table class="sortable" cellspacing="1" cellpadding="3" border="0"><thead><tr valign="top">
+<th align="left"><tt>seq</tt></th>
+<th align="left"><tt>id</tt></th>
+<th align="left"><tt>exp_freq</tt></th>
+<th align="left"><tt>occ</tt></th>
+<th align="left"><tt>exp_occ</tt></th>
+<th align="left"><tt>occ_P</tt></th>
+<th align="left"><tt>occ_E</tt></th>
+<th align="left"><tt>occ_sig</tt></th>
+<th align="left"><tt>rank</tt></th>
+<th align="left"><tt>ovl_occ</tt></th>
+<th align="left"><tt>forbocc</tt></th>
+</tr></thead>
+<tbody>
+
+<tr valign="top">
+<td><tt>ctcccgga</tt></td>
+<td><tt>ctcccgga|tccgggag</tt></td>
+<td><tt>0.0001491368847</tt></td>
+<td><tt>762</tt></td>
+<td><tt>375.50</tt></td>
+<td><tt>1.3e-68</tt></td>
+<td><tt>4.1e-64</tt></td>
+<td><tt>63.38</tt></td>
+<td><tt>1</tt></td>
+<td><tt>0</tt></td>
+<td><tt>5334</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ttccagaa</tt></td>
+<td><tt>ttccagaa|ttctggaa</tt></td>
+<td><tt>0.0001331128437</tt></td>
+<td><tt>700</tt></td>
+<td><tt>335.16</tt></td>
+<td><tt>1e-67</tt></td>
+<td><tt>3.3e-63</tt></td>
+<td><tt>62.48</tt></td>
+<td><tt>2</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4900</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttctgga</tt></td>
+<td><tt>cttctgga|tccagaag</tt></td>
+<td><tt>0.0001052733507</tt></td>
+<td><tt>592</tt></td>
+<td><tt>265.06</tt></td>
+<td><tt>7.2e-67</tt></td>
+<td><tt>2.4e-62</tt></td>
+<td><tt>61.63</tt></td>
+<td><tt>3</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4144</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttccgga</tt></td>
+<td><tt>cttccgga|tccggaag</tt></td>
+<td><tt>0.0002337361467</tt></td>
+<td><tt>1045</tt></td>
+<td><tt>588.51</tt></td>
+<td><tt>1.3e-64</tt></td>
+<td><tt>4.1e-60</tt></td>
+<td><tt>59.38</tt></td>
+<td><tt>4</tt></td>
+<td><tt>73</tt></td>
+<td><tt>7315</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaaga</tt></td>
+<td><tt>ccggaaga|tcttccgg</tt></td>
+<td><tt>0.0002228976267</tt></td>
+<td><tt>1002</tt></td>
+<td><tt>561.22</tt></td>
+<td><tt>4.3e-63</tt></td>
+<td><tt>1.4e-58</tt></td>
+<td><tt>57.85</tt></td>
+<td><tt>5</tt></td>
+<td><tt>15</tt></td>
+<td><tt>7014</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggaaa</tt></td>
+<td><tt>tccggaaa|tttccgga</tt></td>
+<td><tt>0.0003276762567</tt></td>
+<td><tt>1345</tt></td>
+<td><tt>825.04</tt></td>
+<td><tt>5.9e-62</tt></td>
+<td><tt>1.9e-57</tt></td>
+<td><tt>56.72</tt></td>
+<td><tt>6</tt></td>
+<td><tt>93</tt></td>
+<td><tt>9415</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggagag</tt></td>
+<td><tt>ccggagag|ctctccgg</tt></td>
+<td><tt>0.0001102556247</tt></td>
+<td><tt>595</tt></td>
+<td><tt>277.61</tt></td>
+<td><tt>2.1e-61</tt></td>
+<td><tt>6.9e-57</tt></td>
+<td><tt>56.16</tt></td>
+<td><tt>7</tt></td>
+<td><tt>1</tt></td>
+<td><tt>4165</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaaga</tt></td>
+<td><tt>ccagaaga|tcttctgg</tt></td>
+<td><tt>0.0001004036397</tt></td>
+<td><tt>555</tt></td>
+<td><tt>252.80</tt></td>
+<td><tt>1.5e-60</tt></td>
+<td><tt>5.0e-56</tt></td>
+<td><tt>55.30</tt></td>
+<td><tt>8</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3885</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggaaaa</tt></td>
+<td><tt>ccggaaaa|ttttccgg</tt></td>
+<td><tt>0.0003272050167</tt></td>
+<td><tt>1332</tt></td>
+<td><tt>823.85</tt></td>
+<td><tt>1.6e-59</tt></td>
+<td><tt>5.1e-55</tt></td>
+<td><tt>54.29</tt></td>
+<td><tt>9</tt></td>
+<td><tt>8</tt></td>
+<td><tt>9324</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctgatcg</tt></td>
+<td><tt>cctgatcg|cgatcagg</tt></td>
+<td><tt>0.0000615090147</tt></td>
+<td><tt>397</tt></td>
+<td><tt>154.87</tt></td>
+<td><tt>2.3e-59</tt></td>
+<td><tt>7.6e-55</tt></td>
+<td><tt>54.12</tt></td>
+<td><tt>10</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2779</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgggagag</tt></td>
+<td><tt>cgggagag|ctctcccg</tt></td>
+<td><tt>0.0000750075657</tt></td>
+<td><tt>446</tt></td>
+<td><tt>188.86</tt></td>
+<td><tt>5.5e-57</tt></td>
+<td><tt>1.8e-52</tt></td>
+<td><tt>51.75</tt></td>
+<td><tt>11</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3122</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctgatcga</tt></td>
+<td><tt>ctgatcga|tcgatcag</tt></td>
+<td><tt>0.0000494452707</tt></td>
+<td><tt>337</tt></td>
+<td><tt>124.50</tt></td>
+<td><tt>1.2e-55</tt></td>
+<td><tt>3.9e-51</tt></td>
+<td><tt>50.41</tt></td>
+<td><tt>12</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2359</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctccggaa</tt></td>
+<td><tt>ctccggaa|ttccggag</tt></td>
+<td><tt>0.0001847644107</tt></td>
+<td><tt>836</tt></td>
+<td><tt>465.21</tt></td>
+<td><tt>5e-54</tt></td>
+<td><tt>1.6e-49</tt></td>
+<td><tt>48.78</tt></td>
+<td><tt>13</tt></td>
+<td><tt>0</tt></td>
+<td><tt>5852</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctctccc</tt></td>
+<td><tt>cctctccc|gggagagg</tt></td>
+<td><tt>0.0000716517627</tt></td>
+<td><tt>422</tt></td>
+<td><tt>180.41</tt></td>
+<td><tt>5.1e-53</tt></td>
+<td><tt>1.7e-48</tt></td>
+<td><tt>47.78</tt></td>
+<td><tt>14</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2954</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggatcg</tt></td>
+<td><tt>ccggatcg|cgatccgg</tt></td>
+<td><tt>0.0001662339867</tt></td>
+<td><tt>761</tt></td>
+<td><tt>418.55</tt></td>
+<td><tt>4.3e-51</tt></td>
+<td><tt>1.4e-46</tt></td>
+<td><tt>45.85</tt></td>
+<td><tt>15</tt></td>
+<td><tt>7</tt></td>
+<td><tt>5327</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttgtcga</tt></td>
+<td><tt>cttgtcga|tcgacaag</tt></td>
+<td><tt>0.0000354534027</tt></td>
+<td><tt>264</tt></td>
+<td><tt>89.27</tt></td>
+<td><tt>1.3e-50</tt></td>
+<td><tt>4.4e-46</tt></td>
+<td><tt>45.35</tt></td>
+<td><tt>16</tt></td>
+<td><tt>2</tt></td>
+<td><tt>1848</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gggagaga</tt></td>
+<td><tt>gggagaga|tctctccc</tt></td>
+<td><tt>0.0000764206917</tt></td>
+<td><tt>434</tt></td>
+<td><tt>192.42</tt></td>
+<td><tt>1.4e-50</tt></td>
+<td><tt>4.5e-46</tt></td>
+<td><tt>45.35</tt></td>
+<td><tt>17</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3038</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggaca</tt></td>
+<td><tt>tccggaca|tgtccgga</tt></td>
+<td><tt>0.0001628870937</tt></td>
+<td><tt>736</tt></td>
+<td><tt>410.12</tt></td>
+<td><tt>1.3e-47</tt></td>
+<td><tt>4.3e-43</tt></td>
+<td><tt>42.36</tt></td>
+<td><tt>18</tt></td>
+<td><tt>22</tt></td>
+<td><tt>5152</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggcaa</tt></td>
+<td><tt>tccggcaa|ttgccgga</tt></td>
+<td><tt>0.0000859816167</tt></td>
+<td><tt>461</tt></td>
+<td><tt>216.49</tt></td>
+<td><tt>2.5e-47</tt></td>
+<td><tt>8.2e-43</tt></td>
+<td><tt>42.09</tt></td>
+<td><tt>19</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3227</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggacaa</tt></td>
+<td><tt>ccggacaa|ttgtccgg</tt></td>
+<td><tt>0.0001101299937</tt></td>
+<td><tt>548</tt></td>
+<td><tt>277.29</tt></td>
+<td><tt>9.4e-47</tt></td>
+<td><tt>3.1e-42</tt></td>
+<td><tt>41.51</tt></td>
+<td><tt>20</tt></td>
+<td><tt>3</tt></td>
+<td><tt>3836</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccggaga</tt></td>
+<td><tt>tccggaga|tctccgga</tt></td>
+<td><tt>0.0001955719437</tt></td>
+<td><tt>834</tt></td>
+<td><tt>492.42</tt></td>
+<td><tt>1e-44</tt></td>
+<td><tt>3.4e-40</tt></td>
+<td><tt>39.47</tt></td>
+<td><tt>21</tt></td>
+<td><tt>23</tt></td>
+<td><tt>5838</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccagaaa</tt></td>
+<td><tt>tccagaaa|tttctgga</tt></td>
+<td><tt>0.0001475180367</tt></td>
+<td><tt>670</tt></td>
+<td><tt>371.43</tt></td>
+<td><tt>3.5e-44</tt></td>
+<td><tt>1.1e-39</tt></td>
+<td><tt>38.94</tt></td>
+<td><tt>22</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4690</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gatccgga</tt></td>
+<td><tt>gatccgga|tccggatc</tt></td>
+<td><tt>0.0002589029367</tt></td>
+<td><tt>1032</tt></td>
+<td><tt>651.88</tt></td>
+<td><tt>5e-43</tt></td>
+<td><tt>1.6e-38</tt></td>
+<td><tt>37.78</tt></td>
+<td><tt>23</tt></td>
+<td><tt>92</tt></td>
+<td><tt>7224</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccgggaga</tt></td>
+<td><tt>ccgggaga|tctcccgg</tt></td>
+<td><tt>0.0001422302487</tt></td>
+<td><tt>646</tt></td>
+<td><tt>358.11</tt></td>
+<td><tt>1.1e-42</tt></td>
+<td><tt>3.7e-38</tt></td>
+<td><tt>37.43</tt></td>
+<td><tt>24</tt></td>
+<td><tt>5</tt></td>
+<td><tt>4522</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggtcga</tt></td>
+<td><tt>ccggtcga|tcgaccgg</tt></td>
+<td><tt>0.0000885815547</tt></td>
+<td><tt>455</tt></td>
+<td><tt>223.03</tt></td>
+<td><tt>2.6e-42</tt></td>
+<td><tt>8.5e-38</tt></td>
+<td><tt>37.07</tt></td>
+<td><tt>25</tt></td>
+<td><tt>3</tt></td>
+<td><tt>3185</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ggcgatca</tt></td>
+<td><tt>ggcgatca|tgatcgcc</tt></td>
+<td><tt>0.0000376819917</tt></td>
+<td><tt>255</tt></td>
+<td><tt>94.88</tt></td>
+<td><tt>4.4e-42</tt></td>
+<td><tt>1.4e-37</tt></td>
+<td><tt>36.84</tt></td>
+<td><tt>26</tt></td>
+<td><tt>0</tt></td>
+<td><tt>1785</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>agggagag</tt></td>
+<td><tt>agggagag|ctctccct</tt></td>
+<td><tt>0.0000460790727</tt></td>
+<td><tt>288</tt></td>
+<td><tt>116.02</tt></td>
+<td><tt>3.6e-41</tt></td>
+<td><tt>1.2e-36</tt></td>
+<td><tt>35.92</tt></td>
+<td><tt>27</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2016</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctctctcc</tt></td>
+<td><tt>ctctctcc|ggagagag</tt></td>
+<td><tt>0.0000593167587</tt></td>
+<td><tt>340</tt></td>
+<td><tt>149.35</tt></td>
+<td><tt>8.1e-41</tt></td>
+<td><tt>2.6e-36</tt></td>
+<td><tt>35.58</tt></td>
+<td><tt>28</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2380</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atcgacaa</tt></td>
+<td><tt>atcgacaa|ttgtcgat</tt></td>
+<td><tt>0.0000346810047</tt></td>
+<td><tt>239</tt></td>
+<td><tt>87.32</tt></td>
+<td><tt>9.3e-41</tt></td>
+<td><tt>3.1e-36</tt></td>
+<td><tt>35.51</tt></td>
+<td><tt>29</tt></td>
+<td><tt>0</tt></td>
+<td><tt>1673</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaagg</tt></td>
+<td><tt>ccagaagg|ccttctgg</tt></td>
+<td><tt>0.0000940858557</tt></td>
+<td><tt>469</tt></td>
+<td><tt>236.89</tt></td>
+<td><tt>1.8e-40</tt></td>
+<td><tt>5.9e-36</tt></td>
+<td><tt>35.23</tt></td>
+<td><tt>30</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3283</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atccggac</tt></td>
+<td><tt>atccggac|gtccggat</tt></td>
+<td><tt>0.0001592983437</tt></td>
+<td><tt>691</tt></td>
+<td><tt>401.09</tt></td>
+<td><tt>1.6e-39</tt></td>
+<td><tt>5.4e-35</tt></td>
+<td><tt>34.27</tt></td>
+<td><tt>31</tt></td>
+<td><tt>3</tt></td>
+<td><tt>4837</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctggtcga</tt></td>
+<td><tt>ctggtcga|tcgaccag</tt></td>
+<td><tt>0.0000420508617</tt></td>
+<td><tt>266</tt></td>
+<td><tt>105.88</tt></td>
+<td><tt>5.3e-39</tt></td>
+<td><tt>1.7e-34</tt></td>
+<td><tt>33.76</tt></td>
+<td><tt>32</tt></td>
+<td><tt>1</tt></td>
+<td><tt>1862</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctggaaga</tt></td>
+<td><tt>ctggaaga|tcttccag</tt></td>
+<td><tt>0.0001053605697</tt></td>
+<td><tt>499</tt></td>
+<td><tt>265.28</tt></td>
+<td><tt>1.4e-37</tt></td>
+<td><tt>4.7e-33</tt></td>
+<td><tt>32.33</tt></td>
+<td><tt>33</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3493</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>tccgggaa</tt></td>
+<td><tt>tccgggaa|ttcccgga</tt></td>
+<td><tt>0.0002385148767</tt></td>
+<td><tt>939</tt></td>
+<td><tt>600.54</tt></td>
+<td><tt>1.8e-37</tt></td>
+<td><tt>5.9e-33</tt></td>
+<td><tt>32.23</tt></td>
+<td><tt>34</tt></td>
+<td><tt>0</tt></td>
+<td><tt>6573</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cctcttcc</tt></td>
+<td><tt>cctcttcc|ggaagagg</tt></td>
+<td><tt>0.0001121337537</tt></td>
+<td><tt>522</tt></td>
+<td><tt>282.34</tt></td>
+<td><tt>2.2e-37</tt></td>
+<td><tt>7.1e-33</tt></td>
+<td><tt>32.15</tt></td>
+<td><tt>35</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3654</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ttccggaa</tt></td>
+<td><tt>ttccggaa|ttccggaa</tt></td>
+<td><tt>0.0001478040883</tt></td>
+<td><tt>643</tt></td>
+<td><tt>372.15</tt></td>
+<td><tt>3e-37</tt></td>
+<td><tt>1.0e-32</tt></td>
+<td><tt>32.00</tt></td>
+<td><tt>36</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4501</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctcctgaa</tt></td>
+<td><tt>ctcctgaa|ttcaggag</tt></td>
+<td><tt>0.0000683239767</tt></td>
+<td><tt>362</tt></td>
+<td><tt>172.03</tt></td>
+<td><tt>1.4e-36</tt></td>
+<td><tt>4.5e-32</tt></td>
+<td><tt>31.35</tt></td>
+<td><tt>37</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2534</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggatca</tt></td>
+<td><tt>ccggatca|tgatccgg</tt></td>
+<td><tt>0.0001281830397</tt></td>
+<td><tt>574</tt></td>
+<td><tt>322.75</tt></td>
+<td><tt>1.4e-36</tt></td>
+<td><tt>4.8e-32</tt></td>
+<td><tt>31.32</tt></td>
+<td><tt>38</tt></td>
+<td><tt>3</tt></td>
+<td><tt>4018</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctccagaa</tt></td>
+<td><tt>ctccagaa|ttctggag</tt></td>
+<td><tt>0.0000833405937</tt></td>
+<td><tt>414</tt></td>
+<td><tt>209.84</tt></td>
+<td><tt>1.2e-35</tt></td>
+<td><tt>4.0e-31</tt></td>
+<td><tt>30.40</tt></td>
+<td><tt>39</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2898</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cgaccaga</tt></td>
+<td><tt>cgaccaga|tctggtcg</tt></td>
+<td><tt>0.0000557933487</tt></td>
+<td><tt>311</tt></td>
+<td><tt>140.48</tt></td>
+<td><tt>2.1e-35</tt></td>
+<td><tt>6.9e-31</tt></td>
+<td><tt>30.16</tt></td>
+<td><tt>40</tt></td>
+<td><tt>1</tt></td>
+<td><tt>2177</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccggacag</tt></td>
+<td><tt>ccggacag|ctgtccgg</tt></td>
+<td><tt>0.0001395345777</tt></td>
+<td><tt>606</tt></td>
+<td><tt>351.33</tt></td>
+<td><tt>5.1e-35</tt></td>
+<td><tt>1.7e-30</tt></td>
+<td><tt>29.78</tt></td>
+<td><tt>41</tt></td>
+<td><tt>4</tt></td>
+<td><tt>4242</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaaca</tt></td>
+<td><tt>ccagaaca|tgttctgg</tt></td>
+<td><tt>0.0000575991087</tt></td>
+<td><tt>315</tt></td>
+<td><tt>145.03</tt></td>
+<td><tt>2.1e-34</tt></td>
+<td><tt>6.9e-30</tt></td>
+<td><tt>29.16</tt></td>
+<td><tt>42</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2205</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atccggaa</tt></td>
+<td><tt>atccggaa|ttccggat</tt></td>
+<td><tt>0.0002285020167</tt></td>
+<td><tt>891</tt></td>
+<td><tt>575.33</tt></td>
+<td><tt>2.5e-34</tt></td>
+<td><tt>8.3e-30</tt></td>
+<td><tt>29.08</tt></td>
+<td><tt>43</tt></td>
+<td><tt>4</tt></td>
+<td><tt>6237</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ctctcccc</tt></td>
+<td><tt>ctctcccc|ggggagag</tt></td>
+<td><tt>0.0000583770507</tt></td>
+<td><tt>317</tt></td>
+<td><tt>146.98</tt></td>
+<td><tt>4.4e-34</tt></td>
+<td><tt>1.4e-29</tt></td>
+<td><tt>28.84</tt></td>
+<td><tt>44</tt></td>
+<td><tt>0</tt></td>
+<td><tt>2219</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccatccgg</tt></td>
+<td><tt>ccatccgg|ccggatgg</tt></td>
+<td><tt>0.0001589351127</tt></td>
+<td><tt>665</tt></td>
+<td><tt>400.17</tt></td>
+<td><tt>8.2e-34</tt></td>
+<td><tt>2.7e-29</tt></td>
+<td><tt>28.57</tt></td>
+<td><tt>45</tt></td>
+<td><tt>3</tt></td>
+<td><tt>4655</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cccggaca</tt></td>
+<td><tt>cccggaca|tgtccggg</tt></td>
+<td><tt>0.0001184797527</tt></td>
+<td><tt>530</tt></td>
+<td><tt>298.31</tt></td>
+<td><tt>8.4e-34</tt></td>
+<td><tt>2.7e-29</tt></td>
+<td><tt>28.56</tt></td>
+<td><tt>46</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3710</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>ccagaaaa</tt></td>
+<td><tt>ccagaaaa|ttttctgg</tt></td>
+<td><tt>0.0001473124137</tt></td>
+<td><tt>626</tt></td>
+<td><tt>370.91</tt></td>
+<td><tt>1.2e-33</tt></td>
+<td><tt>3.9e-29</tt></td>
+<td><tt>28.41</tt></td>
+<td><tt>47</tt></td>
+<td><tt>0</tt></td>
+<td><tt>4382</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>atccagaa</tt></td>
+<td><tt>atccagaa|ttctggat</tt></td>
+<td><tt>0.0001029565527</tt></td>
+<td><tt>476</tt></td>
+<td><tt>259.23</tt></td>
+<td><tt>1.3e-33</tt></td>
+<td><tt>4.2e-29</tt></td>
+<td><tt>28.37</tt></td>
+<td><tt>48</tt></td>
+<td><tt>2</tt></td>
+<td><tt>3332</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>gtccagaa</tt></td>
+<td><tt>gtccagaa|ttctggac</tt></td>
+<td><tt>0.0000928499397</tt></td>
+<td><tt>440</tt></td>
+<td><tt>233.78</tt></td>
+<td><tt>2.1e-33</tt></td>
+<td><tt>6.8e-29</tt></td>
+<td><tt>28.16</tt></td>
+<td><tt>49</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3080</tt></td>
+</tr>
+
+<tr valign="top">
+<td><tt>cttccaga</tt></td>
+<td><tt>cttccaga|tctggaag</tt></td>
+<td><tt>0.0001053711627</tt></td>
+<td><tt>483</tt></td>
+<td><tt>265.31</tt></td>
+<td><tt>2.9e-33</tt></td>
+<td><tt>9.6e-29</tt></td>
+<td><tt>28.02</tt></td>
+<td><tt>50</tt></td>
+<td><tt>0</tt></td>
+<td><tt>3381</tt></td>
+</tr>
+
+</tbody><tfoot></tfoot></table><pre> Host name	sinik
+ Job started	2020-05-20.095801
+ Job done	2020-05-20.095809
+ Seconds	7.67
+	user	7.67
+	system	0.13
+	cuser	0.75
+;	csystem	0.05
+</pre>
+<h2>Pattern assembly</h2>
+<pre>pattern-assembly command: $RSAT/perl-scripts/pattern-assembly -v 1 -subst 1 -toppat 50 -2str -max_asmb_nb 20 -i $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb<p>
+</p></pre><blockquote class="warning">
+<font color="#FFAA00"><b>Warning: </b>Number of patterns = 150.	Exceeds top number = 50.	Only the top 50 patterns will be assembled.</font>
+</blockquote><br><hr size="3">
+<pre>; pattern-assembly  -v 1 -subst 1 -toppat 50 -2str -max_asmb_nb 20 -i $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb
+; Input file	/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab
+; Output file	/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb
+; Input score column           	8
+; Output score column          	0
+; Strand-insensitive assembly
+; Max flanking bases           	1
+; Max substitutions            	1
+; Min matches                  	0
+; Min weight                   	0
+; Max assembly size            	50
+; Max assembly width           	0
+; Top number of patterns       	50
+; Number of input patterns     	150
+; THE ASSEMBLY WAS RESTRICTED TO THE	50 TOP PATTERNS
+;
+;Number of patterns = 150.	Exceeds top number = 50.	Only the top 50 patterns will be assembled.
+
+; assembly # 1	seed: ccagaa	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+tccaga..	..tctgga	83.38
+.ccagaa.	.ttctgg.	280.26
+..cagaag	cttctg..	43.22
+tccagaag	cttctgga	280.26	best consensus
+
+; assembly # 2	seed: tccgga	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+ttccgg..	..ccggaa	105.13
+.tccgga.	.tccgga.	229.14
+..ccggaa	ttccgg..	105.13
+ttccggaa	ttccggaa	229.14	best consensus
+
+; assembly # 3	seed: ctctcc	6 assembled patterns	length 11
+;    alignt	    rev_cpl	score
+ctctcc.....	.....ggagag	180.25
+.tctccc....	....gggaga.	118.85
+..ctcccg...	...cgggag..	101.41
+...tcccgg..	..ccggga...	48.60
+....cccgga.	.tccggg....	90.94
+.....ccggaa	ttccgg.....	105.13
+ctctcccggaa	ttccgggagag	180.25	best consensus
+
+; assembly # 4	seed: cgacaa	4 assembled patterns	length 9
+;  alignt	  rev_cpl	score
+atcgac...	...gtcgat	69.98
+.tcgaca..	..tgtcga.	62.74
+..cgacaa.	.ttgtcg..	134.23
+...gacaag	cttgtc...	68.34
+atcgacaag	cttgtcgat	134.23	best consensus
+
+; assembly # 5	seed: atcgcc	1 assembled patterns	length 6
+;alignt	rev_cpl	score
+atcgcc	ggcgat	111.66
+atcgcc	ggcgat	111.66	best consensus
+
+; assembly # 6	seed: cgatca	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+gacgat..	..atcgtc	46.35
+.acgatc.	.gatcgt.	45.33
+..cgatca	tgatcg..	99.88
+gacgatca	tgatcgtc	99.88	best consensus
+
+; assembly # 7	seed: atccgg	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+atccgg..	..ccggat	99.09
+.tccgga.	.tccgga.	229.14
+..ccggaa	ttccgg..	105.13
+atccggaa	ttccggat	229.14	best consensus
+
+; assembly # 8	seed: attgcc	2 assembled patterns	length 7
+;alignt	rev_cpl	score
+attgcc.	.ggcaat	90.31
+.ttgccg	cggcaa.	63.77
+attgccg	cggcaat	90.31	best consensus
+
+; assembly # 9	seed: ctcttc	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+gctctt..	..aagagc	40.70
+.ctcttc.	.gaagag.	85.00
+..tcttcc	ggaaga..	42.83
+gctcttcc	ggaagagc	85.00	best consensus
+
+; assembly # 10	seed: cctgaa	1 assembled patterns	length 6
+;alignt	rev_cpl	score
+cctgaa	ttcagg	79.76
+cctgaa	ttcagg	79.76	best consensus
+
+; assembly # 11	seed: ccggac	6 assembled patterns	length 11
+;    alignt	    rev_cpl	score
+ttccgg.....	.....ccggaa	105.13
+.tccgga....	....tccgga.	229.14
+..ccggac...	...gtccgg..	74.77
+...cggaca..	..tgtccg...	42.75
+....ggacaa.	.ttgtcc....	43.99
+.....gacaag	cttgtc.....	68.34
+ttccggacaag	cttgtccggaa	229.14	best consensus
+
+; assembly # 12	seed: caggag	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+caggag..	..ctcctg	74.45
+.aggaga.	.tctcct.	48.50
+..ggagag	ctctcc..	180.25
+caggagag	ctctcctg	180.25	best consensus
+
+; assembly # 13	seed: accgga	2 assembled patterns	length 7
+;alignt	rev_cpl	score
+accgga.	.tccggt	68.71
+.ccggaa	ttccgg.	105.13
+accggaa	ttccggt	105.13	best consensus
+
+; assembly # 14	seed: cgggaa	4 assembled patterns	length 9
+;  alignt	  rev_cpl	score
+ttccgg...	...ccggaa	105.13
+.tccggg..	..cccgga.	90.94
+..ccggga.	.tcccgg..	48.60
+...cgggaa	ttcccg...	68.03
+ttccgggaa	ttcccggaa	105.13	best consensus
+
+; assembly # 15	seed: ccggag	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+ttccgg..	..ccggaa	105.13
+.tccgga.	.tccgga.	229.14
+..ccggag	ctccgg..	65.75
+ttccggag	ctccggaa	229.14	best consensus
+
+; assembly # 16	seed: attgtc	5 assembled patterns	length 10
+;   alignt	   rev_cpl	score
+gattgt....	....acaatc	43.37
+.attgtc...	...gacaat.	65.58
+..ttgtcg..	..cgacaa..	134.23
+...tgtcga.	.tcgaca...	62.74
+....gtcgat	atcgac....	69.98
+gattgtcgat	atcgacaatc	134.23	best consensus
+
+; assembly # 17	seed: cagggc	1 assembled patterns	length 6
+;alignt	rev_cpl	score
+cagggc	gccctg	63.78
+cagggc	gccctg	63.78	best consensus
+
+; assembly # 18	seed: gccaga	4 assembled patterns	length 9
+;  alignt	  rev_cpl	score
+cgccag...	...ctggcg	47.81
+.gccaga..	..tctggc.	57.19
+..ccagaa.	.ttctgg..	280.26
+...cagaag	cttctg...	43.22
+cgccagaag	cttctggcg	280.26	best consensus
+
+; assembly # 19	seed: accaga	3 assembled patterns	length 8
+; alignt	 rev_cpl	score
+accaga..	..tctggt	56.15
+.ccagaa.	.ttctgg.	280.26
+..cagaag	cttctg..	43.22
+accagaag	cttctggt	280.26	best consensus
+
+; assembly # 20	seed: gaaaaa	1 assembled patterns	length 6
+;alignt	rev_cpl	score
+gaaaaa	tttttc	52.08
+gaaaaa	tttttc	52.08	best consensus
+; Maximal number of assemblies is reached (20). Remaining patterns: 9.
+; Host name	sinik
+; Job started	2020-05-20.095810
+; Job done	2020-05-20.095817
+; Seconds	7.64
+;	user	7.64
+;	system	0.02
+;	cuser	0
+;	csystem	0
+</pre>
+<hr><pre><b>Command to generate matrices (PSSM):</b> $RSAT/perl-scripts/matrix-from-patterns -v 1 -logo  -seq $RSAT/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7 -format fasta -asmb $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb -min_weight 5 -flanks 2 -max_asmb_nb 20 -cluster sig -uth Pval 0.00025 -bginput -markov 0 -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm
+</pre>
+<hr>
+<pre><b>Matrix conversion command:</b> $RSAT/perl-scripts/convert-matrix -v 1  -i $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt -from tab -to tab  -return counts -return consensus -return logo -logo_format png  -logo_opt '-e'  -logo_opt '-M'  -logo_dir $RSAT/public_html/tmp/apache/2020/05/20/logos -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2020-05-20.095847_n9MOBh_converted.tab
+</pre><h2>Matrices</h2><pre>; convert-matrix  -v 1 -i $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt -from tab -to tab -return counts -return consensus -return logo -logo_format png -logo_opt -e -logo_opt -M -logo_dir $RSAT/public_html/tmp/apache/2020/05/20/logos -o $RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2020-05-20.095847_n9MOBh_converted.tab
+; Input files
+;	input	$RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt
+; Input format        	tab
+; Output files
+;	output	$RSAT/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2020-05-20.095847_n9MOBh_converted.tab
+; Output format       	tab
+; pseudo-weight       	1
+a	199	285	343	228	260	315	64	788	26	14	7	12	8	6	991	115	204	253	192	232	283	215
+c	344	301	218	379	357	227	101	290	14	328	30	537	1092	24	28	106	382	307	361	306	264	352
+g	314	365	277	313	342	325	874	27	6	35	1051	8	24	1087	66	56	323	251	336	398	266	328
+t	276	182	295	213	174	266	94	28	1087	756	45	576	9	16	48	856	224	322	244	197	320	238
+//
+; consensus	svwssrGMTyGyCGATsyssts
+; consensus.rc	SASSRSATCGRCRAKCYSSWBS
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_1_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_1_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_1_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_1_logo_rc.png" height="120"></a>
+;
+a	1041	973	231	3467	114	283	4419	273	4261	399	1477	1156
+c	876	1372	4239	601	44	58	59	192	143	191	1121	1344
+g	1394	1054	210	454	4481	4365	199	4215	223	3881	1336	1327
+t	1412	1324	43	201	84	17	46	43	96	252	789	896
+//
+; consensus	kyCAGGAGAGrs
+; consensus.rc	SYCTCTCCTGRM
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_2_logo_rc.png" height="120"></a>
+;
+a	1406	1331	256	403	108	35	117	42	10	111	1029	743
+c	1693	1426	532	4172	197	4750	225	223	4959	4813	1452	1214
+g	1304	1461	4110	356	186	133	91	70	95	171	1753	2310
+t	904	1089	409	376	4816	389	4874	4972	243	212	1073	1040
+//
+; consensus	mvGCTCTTCCsg
+; consensus.rc	CSGGAAGAGCBK
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_3_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_3_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_3_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_3_logo_rc.png" height="120"></a>
+;
+a	466	510	571	508	475	449	347	416	138	34	17	526	24	20	37	12	10	15	293	21	758	514	2089	2037	754	698	567	479	448	516	454	453	536	463
+c	610	597	552	627	623	566	674	579	131	227	1158	157	952	1097	644	757	821	1196	1296	1017	20	20	26	50	426	581	531	614	673	595	588	610	553	613
+g	591	603	554	597	652	596	579	529	114	82	41	50	531	419	427	347	415	425	584	993	1394	1652	68	50	604	601	637	628	556	524	610	613	602	608
+t	526	483	516	461	443	582	593	669	1810	1850	977	1460	686	657	1085	1077	947	557	20	162	21	7	10	56	409	313	458	472	516	558	541	517	502	509
+//
+; consensus	ssvssbbyTTytyyyyyyssrGAArvrssyssss
+; consensus.rc	SSSSRSSYBYTTCYSSRRRRRRARAARVVSSBSS
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_4_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_4_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_4_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_4_logo_rc.png" height="120"></a>
+;
+a	951	788	130	3023	167	136	3311	159	54	2892	683	670
+c	1094	961	113	174	3216	160	59	145	3429	325	841	1066
+g	869	1091	3391	268	132	3336	202	50	167	254	1198	1316
+t	763	837	43	212	162	45	105	3323	27	206	955	625
+//
+; consensus	msGACGATCAks
+; consensus.rc	SMTGATCGTCSK
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_5_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_5_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_5_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_5_logo_rc.png" height="120"></a>
+;
+a	583	490	0	2286	0	0	0	0	551	619
+c	359	788	2286	0	0	0	0	2286	649	441
+g	729	371	0	0	2286	2286	2286	0	620	485
+t	615	637	0	0	0	0	0	0	466	741
+//
+; consensus	dyCAGGGCsw
+; consensus.rc	WSGCCCTGRH
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_6_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_6_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_6_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_6_logo_rc.png" height="120"></a>
+;
+a	1775	1846	0	7615	7615	7615	7615	7615	2622	2145
+c	2559	1536	0	0	0	0	0	0	1543	1872
+g	1705	2815	7615	0	0	0	0	0	2129	2079
+t	1576	1418	0	0	0	0	0	0	1321	1519
+//
+; consensus	cgGAAAAArr
+; consensus.rc	YYTTTTTCCG
+<a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_7_logo.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_7_logo.png" height="120"></a><a href="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_7_logo_rc.png"><img src="./RSAT _ oligo-analysis result_files/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt_7_logo_rc.png" height="120"></a>
+;
+; Host name	sinik
+; Job started	2020-05-20.095847
+; Job done	2020-05-20.095852
+; Seconds	0.74
+;	user	0.74
+;	system	0.1
+;	cuser	3.72
+;	csystem	0.4
+</pre><h2>Result file(s)</h2><table class="resultlink">
+<tbody><tr><th>Content</th><th>URL</th></tr><tr><td>Input sequence</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7</a></td></tr><tr><td>Purged sequence</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7.purged</a></td></tr><tr><td>6-mers</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_6nt.tab</a></td></tr><tr><td>7-mers</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_7nt.tab</a></td></tr><tr><td>8-mers</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_8nt.tab</a></td></tr><tr><td>merged oligos</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab</a></td></tr><tr><td>Assembly</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.asmb</a></td></tr><tr><td>Significance matrices</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_sig_matrices.tf">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_sig_matrices.tf</a></td></tr><tr><td>Rescaled significance matrices</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_sig_matrices_rescaled.tf">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_sig_matrices_rescaled.tf</a></td></tr><tr><td>Final matrices (transfac format)</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.tf">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.tf</a></td></tr><tr><td>Final matrices (tab format)</td><td><a href="http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt">http://embnet.ccg.unam.mx/rsat//tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.txt</a></td></tr></tbody></table><hr size="3"><table class="nextstep" cellspacing="0" cellpadding="10" border="0" nowrap="">
+<tbody><tr>
+
+</tr><tr valign="top" align="center">
+    <th valign="BOTTOM" align="CENTER" colspan="6">
+	Next step
+    </th>
+
+</tr>
+
+<tr><td valign="bottom" align="center">
+<form method="POST" action="http://embnet.ccg.unam.mx/rsat/dna-pattern_form.cgi">
+<input type="hidden" name="title" value="">
+<input type="hidden" name="pattern_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab">
+<input type="hidden" name="sequence_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7">
+<input type="hidden" name="sequence_format" value="fasta">
+<input type="submit" value="string-based pattern matching (dna-pattern)">
+</form>
+</td>
+
+<td valign="bottom" align="center">
+<form method="POST" action="http://embnet.ccg.unam.mx/rsat/pattern-assembly_form.cgi">
+<input type="hidden" name="local_pattern_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab">
+<input type="hidden" name="subst" value="1">
+<input type="hidden" name="maxfl" value="1">
+<input type="hidden" name="sc" value="auto">
+<input type="hidden" name="strand" value="insensitive">
+<input type="submit" value="pattern assembly">
+</form>
+</td>
+</tr>
+
+<tr><td valign="bottom" align="center"><form method="POST" action="http://embnet.ccg.unam.mx/rsat/matrix-scan_form.cgi"><input type="hidden" name="matrix_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.tf"><input type="hidden" name="matrix_format" value="transfac"><input type="hidden" name="sequence_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/tmp_sequence_2020-05-20.095742_vf7oR7"><input type="hidden" name="sequence_format" value="fasta"><input type="submit" value="matrix-based pattern matching (matrix-scan)"></form></td></tr><tr><td valign="bottom" align="center"><form method="POST" action="http://embnet.ccg.unam.mx/rsat/convert-matrix_form.cgi"><input type="hidden" name="matrix_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3_pssm_count_matrices.tf"><input type="hidden" name="matrix_format" value="transfac"><input type="submit" value="matrix conversion"></form></td></tr><tr></tr>
+
+<tr>
+<td valign="bottom" align="center">
+<form method="POST" action="http://embnet.ccg.unam.mx/rsat/XYgraph_form.cgi">
+<input type="hidden" name="title1" value="oligo-analysis result">
+<input type="hidden" name="title2" value="">
+<input type="hidden" name="XYgraph_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab">
+<input type="hidden" name="xcol" value="5">
+<input type="hidden" name="xleg1" value="expected occurrences">
+<input type="hidden" name="ycol" value="4">
+<input type="hidden" name="yleg1" value="observed occurrences">
+<input type="submit" value="XY graph">
+</form>
+</td>
+
+  <td>
+<form method="POST" action="http://embnet.ccg.unam.mx/rsat/classfreq_form.cgi">
+<input type="hidden" name="transferred_file" value="/space23/rsat/public_html/tmp/apache/2020/05/20/oligo-analysis_2020-05-20.095742_t87xY3.tab">
+<input type="submit" value="Frequency distribution">
+ </form>
+  </td>
+</tr>
+
+
+</tbody></table>
+<hr size="3">
+
+</div></div><div id="cboxOverlay" style="display: none;"></div><div id="colorbox" class="" role="dialog" tabindex="-1" style="display: none;"><div id="cboxWrapper"><div><div id="cboxTopLeft" style="float: left;"></div><div id="cboxTopCenter" style="float: left;"></div><div id="cboxTopRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxMiddleLeft" style="float: left;"></div><div id="cboxContent" style="float: left;"><div id="cboxTitle" style="float: left;"></div><div id="cboxCurrent" style="float: left;"></div><button type="button" id="cboxPrevious"></button><button type="button" id="cboxNext"></button><button type="button" id="cboxSlideshow"></button><div id="cboxLoadingOverlay" style="float: left;"></div><div id="cboxLoadingGraphic" style="float: left;"></div></div><div id="cboxMiddleRight" style="float: left;"></div></div><div style="clear: left;"><div id="cboxBottomLeft" style="float: left;"></div><div id="cboxBottomCenter" style="float: left;"></div><div id="cboxBottomRight" style="float: left;"></div></div></div><div style="position: absolute; width: 9999px; visibility: hidden; display: none; max-width: none;"></div></div></body></html>
